@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 22-oct-2026 (8.4 — Pass UI/HIG para producción: login ≥44px, micro-feedback, recuperación+error inline, --shadow-card, empty states, negativos semánticos)
+**Última actualización:** 25-oct-2026 (8.5 — Fix flechas dobles en Ajustes: chevron manual duplicado eliminado, queda el nativo de la primitiva)
 
 ---
 
@@ -43,6 +43,7 @@
 | **8.2 — CRUD cuentas v1 + multiagentes opencode** | `POST`/`PATCH`/`DELETE /api/v1/accounts` con servicio compartido `accounts-service.ts` (nace la capa de `src/lib/services/`), guard 409 de historial (cierra SDD §7.7), flujo multiagente coordinador→planificador→implementador→revisor cableado en `.opencode/`, skills `finzen-dev-harness` + `hig-ux-ui` (HIG Apple), script `verify`. E2E 21/21 local ✓ | 22-oct-2026 |
 | **8.3 — Importar desde tu banco** | Wizard de estados de cuenta: parser OFX/QFX (`ofx.ts`), presets CSV de bancos dominicanos (`bank-presets.ts`: BPD, Banreservas, BHD, APAP, genérico), `parseCSVLine` extraída a `csv.ts` compartida, dedup con fix del bug latente de ingresos (`realAccountId`), preview con tabla y advertencia de moneda distinta. Fixtures parsers 33/33 ✓ | 22-oct-2026 |
 | **8.4 — Pass UI/HIG producción** | FIX 1-6 del dueño: submit login `h-11 min-h-11` (≥44px), micro-feedback en primitivas (`active:brightness-95`, `duration-150`, hover primario oscurece 8% vía token `--primary-hover`), login con "¿Olvidaste tu contraseña?" (mailto real) + error inline que conserva el email, token `--shadow-card` (tinta #00274a) en login+dashboard, empty states completos (transactions/reports/categories), negativos semánticos (`text-expense`) y hex crudo de chrome eliminado. Revisor APRUEBA · verify ✓ | 22-oct-2026 |
+| **8.5 — Fix flechas dobles Ajustes** | Solicitud directa del dueño: cada acordeón de Ajustes mostraba 2 chevrons (uno manual sin rotación + el nativo de la primitiva). Eliminado el `ChevronDown` manual de `settings-view.tsx` y su import; queda el chevron nativo con rotación. verify ✓ (cambio trivial, sin flujo multiagente) | 25-oct-2026 |
 
 ## 3. Decisiones de arquitectura y su porqué
 

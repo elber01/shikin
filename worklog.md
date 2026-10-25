@@ -5911,3 +5911,39 @@ afectación (401/405/404 = comportamiento viejo esperado).
 3. Correr: `bun scripts/e2e-accounts-v1.js --base https://finzen-zeta.vercel.app --key <key de Grazia>` → 21/21 cierra el criterio.
 4. Smoke post-deploy: `curl -X POST .../api/v1/accounts` sin key → 401
    (antes 405); login renderiza `min-h-11`/`shadow-card`.
+
+---
+
+## PHASE 8.5 — Fix flechas dobles en Ajustes (solicitud directa del dueño)
+
+**Task ID:** 8.5
+**Agent:** Coordinador (cambio trivial — sin planificador/implementador/revisor)
+**Status:** ✅ Cerrado — harness verde
+
+### Problema
+
+En el módulo Ajustes, cada fila acordeón (Perfil, Mi Hogar, Categorías,
+Seguridad, Conexiones bancarias) mostraba **dos chevrons**: la primitiva
+shadcn/ui `AccordionTrigger` ya renderiza su propio `ChevronDownIcon`
+(con rotación 180° al abrir via `[&[data-state=open]>svg]:rotate-180`), y
+`settings-view.tsx` añadia manualmente un segundo `ChevronDown` que además
+NO rotaba al expandir — antiestético e inconsistente con el acordeón de
+"Exportar datos" (que solo usaba el chevron nativo).
+
+### Fix
+
+- Eliminado el `<ChevronDown />` manual del trigger del acordeón de items
+  (línea ~218) y su import no usado de lucide-react.
+- Resultado: una sola flecha por fila, con rotación nativa al abrir,
+  `text-muted-foreground`, `size-4` — idéntico al resto de la app.
+
+### Verificación
+
+- `bun run verify` (lint + typecheck + build) ✓ — 22/22 páginas.
+- Sin cambios de contrato, i18n ni tokens; fix puramente visual local.
+
+### Archivos
+
+| Archivo | Cambio |
+|---|---|
+| `src/components/finzen/settings-view.tsx` | −1 `<ChevronDown>` duplicado del trigger + −import no usado |

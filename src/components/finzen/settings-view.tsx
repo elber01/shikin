@@ -43,7 +43,6 @@ import {
   LogOut,
   FileText,
   Database,
-  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFinZenStore } from '@/store/finzen-store';
@@ -215,7 +214,6 @@ export function SettingsView() {
                       <div className="text-xs text-muted-foreground truncate">{item.subtitle}</div>
                     </div>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200" />
                 </AccordionTrigger>
                 <AccordionContent className="pb-4 pt-1">{item.content}</AccordionContent>
               </AccordionItem>
