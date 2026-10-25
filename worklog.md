@@ -5912,6 +5912,16 @@ afectación (401/405/404 = comportamiento viejo esperado).
 4. Smoke post-deploy: `curl -X POST .../api/v1/accounts` sin key → 401
    (antes 405); login renderiza `min-h-11`/`shadow-card`.
 
+### Estado del deploy — RESUELTO (25-oct-2026)
+
+El bloqueo anti-abuso de la cuenta Vercel quedó resuelto por el dueño. El
+push de 8.5 (`df8bbf9`, fix flechas dobles) desplegó sin incidentes.
+Smoke en producción: `/login` → 200 (0.4s) · `POST /api/v1/accounts` sin
+key → 401 (el deploy viejo respondía 405) — código de 8.2+ vivo en
+`finzen-zeta.vercel.app`. La batería E2E 21/21 contra producción con key
+real queda como criterio opcional pendiente (el dueño no conserva el valor
+completo de "Nueva grazzia" — crear key nueva si se desea cerrar).
+
 ---
 
 ## PHASE 8.5 — Fix flechas dobles en Ajustes (solicitud directa del dueño)

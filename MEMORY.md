@@ -99,14 +99,13 @@ coordinador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
   (net savings < 0 en reports corregido; budgets ya cumplía); hex crudo de
   chrome `#6B7280` → `var(--muted-foreground)` en reports y dashboard.
 - **FIX 7 (API agente):** los endpoints 8.2 ya existen y pasan 21/21 en
-  dev (re-verificado esta sesión). Commit+push hecho por el agente con
-  aprobación del dueño (`30f81e8` + reintento `76c2c49`), PERO **Vercel
-  bloqueó ambos deployments** ("Deployment was blocked" — anti-abuso a
-  nivel de CUENTA, no error de build; el build ni corrió). Producción
-  sigue sirviendo el deploy del 29-sep. Pendiente de Edwin: ver el banner
-  del deployment bloqueado en el dashboard Vercel (appeal/verificación de
-  cuenta, revisar Billing) → redeploy → correr la batería con la key de
-  Grazia para cerrar el criterio.
+  dev (re-verificado esta sesión). ~~Vercel bloqueó los deployments
+  8.1–8.4~~ **RESUELTO 25-oct-2026:** Edwin desbloqueó la cuenta; el push
+  de 8.5 (`df8bbf9`) desplegó correctamente. Smoke en producción:
+  `/login` 200 · `POST /api/v1/accounts` sin key → **401** (antes 405 del
+  deploy viejo) = código nuevo vivo. Pendiente opcional para cerrar el
+  criterio del dueño: batería E2E 21/21 contra producción con una key real
+  (crear nueva desde Ajustes o `scripts/gen-turso-api-key.js`).
 - Nota dev: sin `DATABASE_URL`, `next dev` usa `/tmp/finzen.db` (seed copiado
   de `db/custom.db` en el primer cold start); las keys de test deben
   generarse contra ESE archivo.
