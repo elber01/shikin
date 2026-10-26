@@ -5964,7 +5964,7 @@ NO rotaba al expandir — antiestético e inconsistente con el acordeón de
 
 **Task ID:** 9
 **Agent:** Implementador (plan del Coordinador aprobado por el dueño)
-**Status:** ✅ Cerrado — harness verde
+**Status:** ✅ Cerrado — harness verde, push `de0b113`, deploy y smoke en producción ✓
 
 ### Qué se hizo
 
@@ -6004,11 +6004,19 @@ NO rotaba al expandir — antiestético e inconsistente con el acordeón de
 - `alt=""` en los logos: la imagen es decorativa en a11y; el `<h1>`/`<span>`
   adyacente lleva el nombre accesible.
 
-### Renames externos (fuera del repo — acción manual del dueño)
+### Renames externos (ejecutados por el Coordinador tras el push `de0b113`)
 
-- GitHub: renombrar `elber01/finzen` y sus remotes.
-- Vercel: renombrar el proyecto `finzen-zeta` (dominios `*.vercel.app` y
-  `app.getfinzen.com` se repuntan aparte — ver §5 deuda de dominio).
+- **GitHub ✓:** repo renombrado a **`elber01/shikin`** (gh API PATCH +
+  `git remote set-url` local + description "Shikin — finanzas personales
+  y del hogar…"). GitHub redirige el nombre viejo indefinidamente.
+- **Turso ✓ (nada que hacer):** la BD ya se llama `seiri` — sin "finzen"
+  en nombre ni hostname; cero operaciones de BD = cero riesgo de datos.
+- **Vercel ⏳ (pendiente del dueño):** renombrar el proyecto `finzen-zeta`
+  → `shikin` en el dashboard (Settings → General → Rename); con ello
+  cambian las URLs `*.vercel.app`. **Antes de cerrar el rename: revisar si
+  existe `NEXTAUTH_URL` en Environment Variables** (apuntaría a la URL
+  vieja y rompería el login) y probar login manual tras el redeploy.
+  `app.getfinzen.com` se repunta aparte (deuda de dominio MEMORY §5.4).
 
 ### Verificación
 
@@ -6016,6 +6024,15 @@ NO rotaba al expandir — antiestético e inconsistente con el acordeón de
 - Greps de control: `FinZen` uppercase queda SOLO en contenido histórico
   legítimo (worklog/MEMORY cronología vieja, `useFinZenStore`/`FinZenState`
   identifiers); 0 matches en código activo.
+- Smoke en producción (finzen-zeta.vercel.app, deploy de `de0b113`):
+  `<title>Shikin — Personal & Household Finance` ✓ · favicon
+  `/icon.png` PNG 512 ✓ · `og:image` con URL absoluta (metadataBase) ✓ ·
+  4 assets 200 ✓ · `POST /api/v1/accounts` sin key → 401
+  `{success:false, error:"missing_api_key"}` = contrato v1 intacto ✓.
+- Revisor APRUEBA, 0 bloqueantes. Avisos no bloqueantes: `DEFAULT_SRC`
+  absoluto del script (documentado en MEMORY §5.12), ternarios es/en
+  preexistentes en el empty state del dashboard (deuda i18n previa),
+  `NEXT_PUBLIC_BASE_URL` ya documentado en `.env.example` en esta fase.
 
 ### Archivos
 

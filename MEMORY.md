@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 25-oct-2026 (8.5 — Fix flechas dobles en Ajustes: chevron manual duplicado eliminado, queda el nativo de la primitiva)
+**Última actualización:** 26-oct-2026 (9 — Rebrand FinZen → Shikin: logo/favicon/metadata/docs; repo GitHub renombrado a `elber01/shikin`; rename del proyecto Vercel pendiente del dueño)
 
 ---
 
@@ -70,9 +70,37 @@
 | **PATCH v1 de cuentas con campos inmutables** | `currency`/`accountType` → `422 field_not_editable`; cambiarlos rompería la semántica del net worth. `currentBalance` = ajuste directo (saldos bancarios, sin recálculo) | `accounts-service.ts`, rutas v1 |
 | **Flujo multiagente coordinador→planificador→implementador→revisor** | El coordinador orquesta y es el único que cierra (harness + memoria); roles materializados como agentes de opencode con permisos (planificador/revisor read-only) | `.opencode/agent/`, `agent.md` §4 |
 
-## 4. Estado actual (22-oct-2026)
+## 4. Estado actual (26-oct-2026)
 
-**Barreras de calidad:** `bun run verify` (lint+typecheck+build) ✓ · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓.
+**Barreras de calidad:** `bun run verify` (lint+typecheck+build) ✓ · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓.
+
+Sesión 26-oct-2026 (9 — Rebrand FinZen → Shikin, flujo coordinador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
+- **Qué:** la app es **Shikin** en todo lo visible. Logo distintivo del dueño
+  (JPEG analizado con sharp: insignia azul marino centrada sobre fondo
+  claro; crop cuadrado 640x640 → 4 assets vía `scripts/generate-brand-assets.js`:
+  `public/brand/shikin-logo.png` 512², `src/app/icon.png` 512²,
+  `src/app/apple-icon.png` 180², `public/brand/shikin-og.png` 1200x630;
+  `icon.svg` y `logo.svg` huérfanos eliminados). Nombre SIEMPRE por
+  `t['app.name']` (login/sidebar/top bar móvil/footer de Ajustes — la key
+  existía sin consumirse) y saludo del dashboard por `t['auth.welcome']`
+  (cierra ternario hardcodeado). SVG crudo del login → `<Image>` con
+  `ring-border` (cierra el detalle §5.11). Metadata completa "Shikin" +
+  `metadataBase` (VERCEL_PROJECT_PRODUCTION_URL→NEXT_PUBLIC_BASE_URL→
+  localhost) + OG image. Docs/headers + `package.json` name → `shikin`.
+- **Externos:** repo GitHub renombrado a **`elber01/shikin`** (gh API +
+  `git remote set-url` + description). **Turso ya era `seiri`** — nada
+  que renombrar, cero riesgo de datos. **Vercel pendiente del dueño:**
+  renombrar el proyecto `finzen-zeta` (dashboard → Settings → General →
+  Rename; revisar `NEXTAUTH_URL` si existe) — con ello cambian las URLs
+  `*.vercel.app`.
+- **Intactos por decisión del dueño:** identifiers `finzen` minúscula
+  (`src/lib/finzen/`, `finzen-store.ts`, `useFinZenStore`, env `FINZEN_*`,
+  logs `[finzen]`), prefijo de keys `fz_` (invalidaría la key activa),
+  `db.ts` completo, `db/backup.json`, contrato v1.
+- **Verificación:** verify ✓ · smoke producción (deploy `de0b113`): title
+  "Shikin — Personal & Household Finance" ✓ · favicon PNG 512 ✓ · og:image
+  absoluta ✓ · 4 assets 200 ✓ · `POST /api/v1/accounts` sin key → 401
+  `missing_api_key` = contrato vivo ✓.
 
 Sesión 22-oct-2026 (8.4 — Pass UI/HIG para producción, con flujo
 coordinador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
@@ -251,7 +279,10 @@ pendiente de repoint (§5).
    expuesto en commits previos. Verificar que `NEXTAUTH_SECRET` en Vercel
    sea distinto; rotar si coincide.
 4. **Dominio:** `app.getfinzen.com` aún apunta al deploy viejo; el bueno es
-   `finzen-elber01s-projects.vercel.app` (repoint pendiente).
+   `finzen-zeta.vercel.app` / `finzen-elber01s-projects.vercel.app` (ambas
+   responden hoy, smoke 26-oct). Post-rebrand Shikin: al renombrar el
+   proyecto Vercel estas URLs cambian; si Edwin quiere uniformidad total
+   del dominio (p. ej. `getshikin.com`), es compra/DNS aparte.
 5. **Onboarding de saldos iniciales:** crear cuenta con balance ≠ 0 genera
    un "adjustment"? Flujo manual — mejorar UX de primera carga.
 6. **Rate limit de la API v1:** documentado en worklog 7.5; verificar
@@ -270,8 +301,17 @@ pendiente de repoint (§5).
     `x_<cuid>` en la API) al extraer servicios (Fase 1).
 11. **Detalles visuales menores del pass 8.4:** CTAs de empty states usan
     `size="sm"` (h-9, 36px < 44px ideal táctil — consistentes con los empty
-    states preexistentes) y el logo del login usa colores crudos en el SVG
-    inline (`stroke="white"`, `fill="#34D399"`). Pasada visual pendiente.
+    states preexistentes). ~~Logo del login con SVG crudo~~ **RESUELTO
+    (9, 26-oct-2026):** reemplazado por el PNG de Shikin con tokens
+    (`ring-border`).
+12. **Rename total de internals "finzen" (solo si se pide):** paths
+    `src/lib/finzen/`, `src/components/finzen/`, `finzen-store.ts`,
+    `useFinZenStore`, env `FINZEN_*`, logs `[finzen]` y prefijo `fz_`
+    conservan el nombre viejo por decisión del dueño (refactor masivo de
+    imports, cero valor visible — ver sesión 9). Menor:
+    `scripts/generate-brand-assets.js` tiene `DEFAULT_SRC` absoluto a
+    `~/Downloads` (override `--src` existe; en clonación fresca convendría
+    exigir `--src`).
 
 ## 6. Lecciones aprendidas (para no repetir errores)
 
