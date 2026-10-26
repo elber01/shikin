@@ -1,4 +1,4 @@
-// FinZen Prisma Schema
+// Shikin Prisma Schema
 // SQLite database (sandbox: db/custom.db | production: Turso libSQL)
 //
 // The `driverAdapters` preview feature lets us use the @prisma/adapter-libsql

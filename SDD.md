@@ -1,6 +1,6 @@
-# FinZen — Software Design Document (SDD)
+# Shikin — Software Design Document (SDD)
 
-> **Rol de este documento:** fuente única de verdad del **diseño** de FinZen y
+> **Rol de este documento:** fuente única de verdad del **diseño** de Shikin y
 > de su migración hacia Spec-Driven Development, MCP y multiagentes.
 > Bajo SDD, la spec precede al código: ningún cambio de arquitectura o
 > contrato se implementa sin reflejarse aquí primero.

@@ -1,9 +1,9 @@
 ---
 name: finzen-dev-harness
-description: Use when starting, executing or closing any development task in the FinZen repo — the SDD cycle (especificar, implementar, verificar, memorizar) and the quality harness (bun run verify = lint + typecheck + build) that every task must pass. Trigger words: tarea nueva, cerrar tarea, verificar, harness, SDD, ciclo, memorizar, MEMORY.md, worklog, calidad.
+description: Use when starting, executing or closing any development task in the Shikin repo — the SDD cycle (especificar, implementar, verificar, memorizar) and the quality harness (bun run verify = lint + typecheck + build) that every task must pass. Trigger words: tarea nueva, cerrar tarea, verificar, harness, SDD, ciclo, memorizar, MEMORY.md, worklog, calidad.
 ---
 
-# Ciclo SDD + Harness de calidad — FinZen
+# Ciclo SDD + Harness de calidad — Shikin
 
 Todo trabajo en este repo sigue el ciclo Spec-Driven Development de `agent.md` §2
 y se cierra con el harness en verde. Este skill es el procedimiento operativo.

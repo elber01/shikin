@@ -1,7 +1,7 @@
 import type { DefaultSession } from 'next-auth';
 
 /**
- * NextAuth module augmentation — FinZen.
+ * NextAuth module augmentation — Shikin.
  * El session callback en `auth-options.ts` inyecta `user.id` desde el JWT;
  * esta declaración hace que el tipo sea visible en toda la app
  * (API routes usan `session.user.id` como userId de Prisma).

@@ -1,6 +1,6 @@
-# agent.md — Protocolo de agentes IA de FinZen (era SDD/MCP)
+# agent.md — Protocolo de agentes IA de Shikin (era SDD/MCP)
 
-> **Qué define este archivo:** CÓMO trabajan los agentes IA en FinZen bajo
+> **Qué define este archivo:** CÓMO trabajan los agentes IA en Shikin bajo
 > Spec-Driven Development. NO duplica las reglas operativas del repo (estilo,
 > comandos, prohibiciones), que viven en `AGENTS.md`, ni el diseño del
 > sistema, que vive en `SDD.md`.

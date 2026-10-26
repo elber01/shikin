@@ -1,4 +1,4 @@
-# FinZen — Personal & Household Finance Management App
+# Shikin — Personal & Household Finance Management App
 ## Project Worklog
 
 **Project Name:** FinZen (working title)
@@ -5957,3 +5957,77 @@ NO rotaba al expandir — antiestético e inconsistente con el acordeón de
 | Archivo | Cambio |
 |---|---|
 | `src/components/finzen/settings-view.tsx` | −1 `<ChevronDown>` duplicado del trigger + −import no usado |
+
+---
+
+## PHASE 9 — Rebrand FinZen → Shikin (imagen distintiva, favicon y metadata)
+
+**Task ID:** 9
+**Agent:** Implementador (plan del Coordinador aprobado por el dueño)
+**Status:** ✅ Cerrado — harness verde
+
+### Qué se hizo
+
+- **Assets de marca** desde la imagen fuente del dueño (JPEG 1408x768,
+  contenido centrado; bbox 536x568): nuevo script
+  `scripts/generate-brand-assets.js` (ESM + sharp) con crop cuadrado 640x640
+  centrado en el contenido y 4 derivados auto-verificados al generar:
+  `public/brand/shikin-logo.png` (512x512), `src/app/icon.png` (512x512),
+  `src/app/apple-icon.png` (180x180) y `public/brand/shikin-og.png`
+  (1200x630, fuente completa con `fit: 'cover'`). Eliminados los huérfanos
+  `src/app/icon.svg` y `public/logo.svg` (0 referencias).
+- **Branding visible:** el logo SVG inline con colores crudos del login
+  (`stroke="white"`, `fill="#34D399"`, gradiente del wrapper) fue reemplazado
+  por `<Image src="/brand/shikin-logo.png">` con `ring-1 ring-border`
+  (cierra el detalle visual §5.11 de MEMORY); el mismo logo (32x32) se añadió
+  al header del sidebar y al MobileTopBar. Nombre del producto ahora SIEMPRE
+  viaja por `t['app.name']` (login `<h1>`, sidebar, top bar móvil, footer de
+  Ajustes); el saludo del empty state del dashboard usa `t['auth.welcome']`.
+- **Metadata:** `layout.tsx` con `metadataBase` (VERCEL_PROJECT_PRODUCTION_URL
+  → NEXT_PUBLIC_BASE_URL → localhost), título/keywords/authors/openGraph con
+  "Shikin" y `openGraph.images` apuntando al OG 1200x630.
+- **Docs/cosméticos:** `package.json` name → `shikin`; comentarios de
+  `schema.prisma`, `globals.css` (×3), `next-auth.d.ts`, `date-utils.ts`,
+  `.env.example`; headers de `SDD.md`, `AGENTS.md`, `agent.md`, `skills.md`,
+  `README.md`, worklog; system prompt runtime de `agents/orchestrator.md`;
+  descripciones+headers de los 4 agentes `.opencode/agent/*` y de los 2
+  skills `.opencode/skills/*`.
+
+### Decisiones
+
+- **Internals intactos por decisión del dueño:** `finzen` minúscula en
+  paths/imports (`src/lib/finzen/`, `src/components/finzen/`,
+  `finzen-store.ts`, skill `finzen-dev-harness`), logs `[finzen]` de `db.ts`,
+  guard `FINZEN_ALLOW_EPHEMERAL_DB`/`FINZEN_DEV_SEED_PASSWORD`, prefijo de
+  API keys `fz_` y contrato v1 NO se tocaron — refactor separado si se pide.
+- `db/backup.json` (datos del usuario) y `dev.log` (artefacto) intactos.
+- `alt=""` en los logos: la imagen es decorativa en a11y; el `<h1>`/`<span>`
+  adyacente lleva el nombre accesible.
+
+### Renames externos (fuera del repo — acción manual del dueño)
+
+- GitHub: renombrar `elber01/finzen` y sus remotes.
+- Vercel: renombrar el proyecto `finzen-zeta` (dominios `*.vercel.app` y
+  `app.getfinzen.com` se repuntan aparte — ver §5 deuda de dominio).
+
+### Verificación
+
+- `bun run verify` (lint + typecheck + build) ✓ tras los cambios.
+- Greps de control: `FinZen` uppercase queda SOLO en contenido histórico
+  legítimo (worklog/MEMORY cronología vieja, `useFinZenStore`/`FinZenState`
+  identifiers); 0 matches en código activo.
+
+### Archivos
+
+| Archivo | Cambio |
+|---|---|
+| `scripts/generate-brand-assets.js` | + Nuevo generador ESM de assets (sharp, crop 640, 4 derivados con self-check) |
+| `public/brand/shikin-logo.png` · `public/brand/shikin-og.png` | + Assets de marca generados |
+| `src/app/icon.png` · `src/app/apple-icon.png` | + Favicon/apple-icon (convención de metadata files de Next) |
+| `src/app/icon.svg` · `public/logo.svg` | − Huérfanos eliminados (0 referencias) |
+| `src/lib/finzen/i18n.ts` | `app.name`/`auth.welcome` → Shikin (es+en) |
+| `src/components/auth/auth-form.tsx` | Logo SVG crudo → `Image` del asset; `<h1>` por i18n; mailto subject |
+| `src/components/finzen/sidebar.tsx` · `bottom-tab-bar.tsx` | Logo 32x32 + nombre vía i18n (MobileTopBar gana `t` en scope) |
+| `src/components/finzen/dashboard-view.tsx` · `settings-view.tsx` | Bienvenida y footer vía i18n |
+| `src/app/layout.tsx` | `metadataBase` + título/keywords/authors/OG "Shikin" + OG image |
+| `src/types/next-auth.d.ts` · `src/lib/finzen/date-utils.ts` · `prisma/schema.prisma` · `src/app/globals.css` · `.env.example` · `package.json` · `README.md` · `SDD.md` · `AGENTS.md` · `agent.md` · `skills.md` · `agents/orchestrator.md` · `.opencode/agent/*.md` · `.opencode/skills/*/SKILL.md` · `MEMORY.md` · `worklog.md` | Comentarios/headers/cosmética del rebrand + memoria |

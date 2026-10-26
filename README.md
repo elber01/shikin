@@ -1,4 +1,4 @@
-# FinZen — Finanzas personales y del hogar
+# Shikin — Finanzas personales y del hogar
 
 App de gestión de finanzas personales multi-moneda (USD, DOP, EUR, USDT, BTC), con
 español/inglés, modo claro/oscuro, OCR de recibos, API para agentes de IA y motor de alertas.

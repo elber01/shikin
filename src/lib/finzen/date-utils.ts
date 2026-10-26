@@ -1,4 +1,4 @@
-// Date utilities for FinZen — timezone-safe for America/Santo_Domingo
+// Date utilities for Shikin — timezone-safe for America/Santo_Domingo
 
 /**
  * Parse a date string (YYYY-MM-DD or DD/MM/YYYY or MM/DD/YYYY) as a LOCAL date.

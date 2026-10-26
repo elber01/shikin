@@ -16,6 +16,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -59,7 +60,16 @@ export function Sidebar() {
       {/* Header */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-border">
         {!sidebarCollapsed && (
-          <span className="text-xl sm:text-2xl font-bold text-primary tracking-tight">FinZen</span>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/brand/shikin-logo.png"
+              alt=""
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-md ring-1 ring-border"
+            />
+            <span className="text-xl sm:text-2xl font-bold text-primary tracking-tight">{t['app.name']}</span>
+          </div>
         )}
         <button
           onClick={toggleSidebar}

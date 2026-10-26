@@ -405,7 +405,7 @@ export function SettingsView() {
 
       {/* Footer */}
       <div className="text-center text-xs text-muted-foreground py-2">
-        FinZen v2.0.0 · Turso + Auth
+        {t['app.name']} v2.0.0 · Turso + Auth
       </div>
     </div>
   );

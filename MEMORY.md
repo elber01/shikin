@@ -1,4 +1,4 @@
-# MEMORY.md — Memoria viva de FinZen
+# MEMORY.md — Memoria viva de Shikin
 
 > **Propósito:** que cualquier persona o agente IA que inicie una sesión nueva
 > entienda el proyecto SIN leer los 282KB de `worklog.md`. Cronología detallada
@@ -16,6 +16,10 @@
 
 ## 1. Identidad del proyecto
 
+- El producto se llama **Shikin** desde el 25-oct-2026 (antes FinZen). Los
+  identifiers internos (`finzen-store`, `src/lib/finzen/`, `FINZEN_*`,
+  `[finzen]`, prefijo de keys `fz_`) conservan el nombre viejo por decisión
+  del dueño — refactor separado si se pide.
 - **Producto:** finanzas personales y del hogar, inspirado en YNAB, Monarch,
   Copilot y Rocket Money.
 - **Diferenciadores:** multi-moneda real (USD/DOP/EUR/USDT/BTC), i18n es/en,
@@ -44,6 +48,7 @@
 | **8.3 — Importar desde tu banco** | Wizard de estados de cuenta: parser OFX/QFX (`ofx.ts`), presets CSV de bancos dominicanos (`bank-presets.ts`: BPD, Banreservas, BHD, APAP, genérico), `parseCSVLine` extraída a `csv.ts` compartida, dedup con fix del bug latente de ingresos (`realAccountId`), preview con tabla y advertencia de moneda distinta. Fixtures parsers 33/33 ✓ | 22-oct-2026 |
 | **8.4 — Pass UI/HIG producción** | FIX 1-6 del dueño: submit login `h-11 min-h-11` (≥44px), micro-feedback en primitivas (`active:brightness-95`, `duration-150`, hover primario oscurece 8% vía token `--primary-hover`), login con "¿Olvidaste tu contraseña?" (mailto real) + error inline que conserva el email, token `--shadow-card` (tinta #00274a) en login+dashboard, empty states completos (transactions/reports/categories), negativos semánticos (`text-expense`) y hex crudo de chrome eliminado. Revisor APRUEBA · verify ✓ | 22-oct-2026 |
 | **8.5 — Fix flechas dobles Ajustes** | Solicitud directa del dueño: cada acordeón de Ajustes mostraba 2 chevrons (uno manual sin rotación + el nativo de la primitiva). Eliminado el `ChevronDown` manual de `settings-view.tsx` y su import; queda el chevron nativo con rotación. verify ✓ (cambio trivial, sin flujo multiagente) | 25-oct-2026 |
+| **9 — Rebrand FinZen → Shikin** | Logo distintivo, favicon, metadata, docs; renames externos GitHub/Vercel; internals intactos | 26-oct-2026 |
 
 ## 3. Decisiones de arquitectura y su porqué
 

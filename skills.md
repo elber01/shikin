@@ -1,4 +1,4 @@
-# FinZen — Catálogo de Skills (Habilidades de IA)
+# Shikin — Catálogo de Skills (Habilidades de IA)
 
 > **Qué es una skill:** una capacidad probada y documentada — la unidad que
 > hoy se contrata vía API v1 / UI y mañana vía tools MCP (ver `SDD.md` §3).

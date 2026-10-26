@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -110,15 +111,17 @@ export function AuthForm() {
           {locale === 'es' ? 'EN' : 'ES'}
         </button>
 
-        {/* Logo — marca enso, alineada con el favicon */}
+        {/* Logo — marca Shikin, alineada con el favicon */}
         <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-info flex items-center justify-center mb-3 shadow-lg">
-            <svg viewBox="0 0 64 64" className="w-9 h-9" aria-hidden>
-              <path d="M32 13 a19 19 0 1 0 18.5 23.2" stroke="white" strokeWidth="6" strokeLinecap="round" fill="none" />
-              <circle cx="32" cy="32" r="4.5" fill="#34D399" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-primary">FinZen</h1>
+          <Image
+            src="/brand/shikin-logo.png"
+            alt=""
+            width={64}
+            height={64}
+            priority
+            className="w-16 h-16 rounded-2xl ring-1 ring-border mb-3"
+          />
+          <h1 className="text-2xl font-bold text-primary">{t['app.name']}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === 'register' ? t['auth.registerSubtitle'] : t['auth.loginSubtitle']}
           </p>
@@ -219,7 +222,7 @@ export function AuthForm() {
           </button>
           {mode === 'login' && (
             <a
-              href="mailto:hamilton.edwin@gmail.com?subject=FinZen%20-%20Restablecer%20contrase%C3%B1a"
+              href="mailto:hamilton.edwin@gmail.com?subject=Shikin%20-%20Restablecer%20contrase%C3%B1a"
               className="block mt-2 text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors"
             >
               {t['auth.forgotPassword']}

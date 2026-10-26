@@ -226,7 +226,7 @@ export function DashboardView() {
             <span className="text-3xl">👋</span>
           </div>
           <h2 className="text-xl font-bold mb-2">
-            {locale === 'es' ? '¡Bienvenido a FinZen!' : 'Welcome to FinZen!'}
+            {t['auth.welcome']}
           </h2>
           <p className="text-sm text-muted-foreground mb-5 max-w-md mx-auto">
             {locale === 'es'

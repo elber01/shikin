@@ -1,15 +1,15 @@
 ---
 name: hig-ux-ui
-description: Use when improving, reviewing or building FinZen UI/UX — vistas, componentes, diálogos, navegación, dark mode, accesibilidad o i18n. Trigger words: design, UX, UI, HIG, Apple, interfaz, usabilidad, accesibilidad, dark mode, mejora visual. Metodología Apple Human Interface Guidelines adaptada a los tokens y reglas del repo.
+description: Use when improving, reviewing or building Shikin UI/UX — vistas, componentes, diálogos, navegación, dark mode, accesibilidad o i18n. Trigger words: design, UX, UI, HIG, Apple, interfaz, usabilidad, accesibilidad, dark mode, mejora visual. Metodología Apple Human Interface Guidelines adaptada a los tokens y reglas del repo.
 ---
 
-# HIG Apple aplicado a FinZen
+# HIG Apple aplicado a Shikin
 
-Guía para diseñar/revisar UI de FinZen con la metodología de las *Human
+Guía para diseñar/revisar UI de Shikin con la metodología de las *Human
 Interface Guidelines* de Apple, traducida a los tokens y reglas REALES de este
 repo. Fuente oficial: developer.apple.com/design/human-interface-guidelines.
 
-## 1. Los tres principios HIG → su traducción FinZen
+## 1. Los tres principios HIG → su traducción Shikin
 
 ### Claridad (Clarity)
 - El texto es la interfaz: jerarquía clara (título → dato → metadata).

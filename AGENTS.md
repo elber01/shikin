@@ -1,4 +1,4 @@
-# AGENTS.md — Reglas operativas de FinZen
+# AGENTS.md — Reglas operativas de Shikin
 
 Guía obligatoria para **agentes IA y desarrolladores** que trabajen en este repo.
 Objetivo: desarrollo sostenible — que cualquier sesión nueva produzca código
@@ -9,7 +9,7 @@ consistente, verificado y sin regresiones.
 
 ---
 
-## 1. Qué es FinZen
+## 1. Qué es Shikin
 
 App web de finanzas personales y del hogar: multi-moneda (USD/DOP/EUR/USDT/BTC),
 español/inglés, claro/oscuro, OCR de recibos, presupuestos, reportes y una

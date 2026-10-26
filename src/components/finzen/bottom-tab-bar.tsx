@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { useFinZenStore, type ViewKey } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { useTheme } from 'next-themes';
+import Image from 'next/image';
 import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -161,13 +162,23 @@ export function MobileTopBar() {
   const { locale, setLocale } = useFinZenStore();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const t = translations[locale];
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   return (
     <header className="lg:hidden sticky top-0 z-30 bg-surface/95 backdrop-blur-lg border-b border-border">
       <div className="flex items-center justify-between h-14 px-4">
-        <span className="text-lg font-bold text-primary">FinZen</span>
+        <div className="flex items-center gap-2">
+          <Image
+            src="/brand/shikin-logo.png"
+            alt=""
+            width={32}
+            height={32}
+            className="w-8 h-8 rounded-md ring-1 ring-border"
+          />
+          <span className="text-lg font-bold text-primary">{t['app.name']}</span>
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setLocale(locale === 'es' ? 'en' : 'es')}

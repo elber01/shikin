@@ -154,7 +154,7 @@ export type TranslationKey =
   | 'common.english';
 
 const es: Record<TranslationKey, string> = {
-  'app.name': 'FinZen',
+  'app.name': 'Shikin',
   'nav.dashboard': 'Panel',
   'nav.transactions': 'Transacciones',
   'nav.add': 'Agregar',
@@ -178,7 +178,7 @@ const es: Record<TranslationKey, string> = {
   'auth.loginSubtitle': 'Inicia sesión para continuar',
   'auth.registerSubtitle': 'Crea tu cuenta para empezar',
   'auth.welcomeBack': '¡Bienvenido de nuevo!',
-  'auth.welcome': '¡Bienvenido a FinZen!',
+  'auth.welcome': '¡Bienvenido a Shikin!',
   'auth.invalidCredentials': 'Email o contraseña inválidos',
   'auth.errorRequired': 'Email y contraseña son obligatorios',
   'auth.errorGeneric': 'Algo salió mal. Intenta de nuevo.',
@@ -308,7 +308,7 @@ const es: Record<TranslationKey, string> = {
 };
 
 const en: Record<TranslationKey, string> = {
-  'app.name': 'FinZen',
+  'app.name': 'Shikin',
   'nav.dashboard': 'Dashboard',
   'nav.transactions': 'Transactions',
   'nav.add': 'Add',
@@ -332,7 +332,7 @@ const en: Record<TranslationKey, string> = {
   'auth.loginSubtitle': 'Sign in to continue',
   'auth.registerSubtitle': 'Create your account to get started',
   'auth.welcomeBack': 'Welcome back!',
-  'auth.welcome': 'Welcome to FinZen!',
+  'auth.welcome': 'Welcome to Shikin!',
   'auth.invalidCredentials': 'Invalid email or password',
   'auth.errorRequired': 'Email and password are required',
   'auth.errorGeneric': 'Something went wrong. Please try again.',

@@ -15,16 +15,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "FinZen — Personal & Household Finance",
+  metadataBase: new URL(siteUrl),
+  title: "Shikin — Personal & Household Finance",
   description:
     "Complete control over your personal and household finances. Multi-currency (USD/DOP/EUR/USDT/BTC), dark mode, es/en.",
-  keywords: ["finance", "budget", "FinZen", "personal finance", "household"],
-  authors: [{ name: "FinZen" }],
+  keywords: ["finance", "budget", "Shikin", "personal finance", "household"],
+  authors: [{ name: "Shikin" }],
   openGraph: {
-    title: "FinZen — Personal & Household Finance",
+    title: "Shikin — Personal & Household Finance",
     description: "Complete control over your personal and household finances.",
     type: "website",
+    images: [{ url: "/brand/shikin-og.png", width: 1200, height: 630, alt: "Shikin" }],
   },
 };
 
