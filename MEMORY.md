@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 26-oct-2026 (9 — Rebrand FinZen → Shikin: logo/favicon/metadata/docs; repo GitHub renombrado a `elber01/shikin`; rename del proyecto Vercel pendiente del dueño)
+**Última actualización:** 26-oct-2026 (9 — Rebrand FinZen → Shikin completo: GitHub `elber01/shikin`, Vercel proyecto `shikin` + dominio `shikin-elber01s-projects.vercel.app` con redirect 308 del viejo)
 
 ---
 
@@ -89,10 +89,14 @@ Sesión 26-oct-2026 (9 — Rebrand FinZen → Shikin, flujo coordinador→implem
   localhost) + OG image. Docs/headers + `package.json` name → `shikin`.
 - **Externos:** repo GitHub renombrado a **`elber01/shikin`** (gh API +
   `git remote set-url` + description). **Turso ya era `seiri`** — nada
-  que renombrar, cero riesgo de datos. **Vercel pendiente del dueño:**
-  renombrar el proyecto `finzen-zeta` (dashboard → Settings → General →
-  Rename; revisar `NEXTAUTH_URL` si existe) — con ello cambian las URLs
-  `*.vercel.app`.
+  que renombrar, cero riesgo de datos. **Vercel ✓ (cierre con token
+  temporal del dueño, revocado tras el uso):** Edwin renombró el proyecto
+  a `shikin` (el dominio por defecto NO cambia solo con el rename); el
+  coordinador asignó **`shikin-elber01s-projects.vercel.app`** (el
+  `shikin.vercel.app` puro estaba tomado por otra cuenta) y dejó
+  `finzen-zeta.vercel.app` como **redirect 308** al nuevo. No existe
+  `NEXTAUTH_URL` (NextAuth deriva el origin — login OK sin redeploy).
+  Integración Git viva con el repo renombrado.
 - **Intactos por decisión del dueño:** identifiers `finzen` minúscula
   (`src/lib/finzen/`, `finzen-store.ts`, `useFinZenStore`, env `FINZEN_*`,
   logs `[finzen]`), prefijo de keys `fz_` (invalidaría la key activa),
@@ -278,11 +282,12 @@ pendiente de repoint (§5).
 3. **Secreto NextAuth en historial de git:** el fallback antiguo está
    expuesto en commits previos. Verificar que `NEXTAUTH_SECRET` en Vercel
    sea distinto; rotar si coincide.
-4. **Dominio:** `app.getfinzen.com` aún apunta al deploy viejo; el bueno es
-   `finzen-zeta.vercel.app` / `finzen-elber01s-projects.vercel.app` (ambas
-   responden hoy, smoke 26-oct). Post-rebrand Shikin: al renombrar el
-   proyecto Vercel estas URLs cambian; si Edwin quiere uniformidad total
-   del dominio (p. ej. `getshikin.com`), es compra/DNS aparte.
+4. **Dominio custom:** `app.getfinzen.com` aún apunta al deploy viejo y
+   sigue pendiente de repoint. La URL buena desde la fase 9 es
+   **`shikin-elber01s-projects.vercel.app`** (`finzen-zeta.vercel.app` es
+   redirect 308 hacia ella). `shikin.vercel.app` está tomado por otra
+   cuenta; si Edwin quiere uniformidad total del dominio (p. ej.
+   `getshikin.com`), es compra/DNS aparte.
 5. **Onboarding de saldos iniciales:** crear cuenta con balance ≠ 0 genera
    un "adjustment"? Flujo manual — mejorar UX de primera carga.
 6. **Rate limit de la API v1:** documentado en worklog 7.5; verificar

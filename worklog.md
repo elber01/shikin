@@ -6011,12 +6011,20 @@ NO rotaba al expandir — antiestético e inconsistente con el acordeón de
   y del hogar…"). GitHub redirige el nombre viejo indefinidamente.
 - **Turso ✓ (nada que hacer):** la BD ya se llama `seiri` — sin "finzen"
   en nombre ni hostname; cero operaciones de BD = cero riesgo de datos.
-- **Vercel ⏳ (pendiente del dueño):** renombrar el proyecto `finzen-zeta`
-  → `shikin` en el dashboard (Settings → General → Rename); con ello
-  cambian las URLs `*.vercel.app`. **Antes de cerrar el rename: revisar si
-  existe `NEXTAUTH_URL` en Environment Variables** (apuntaría a la URL
-  vieja y rompería el login) y probar login manual tras el redeploy.
-  `app.getfinzen.com` se repunta aparte (deuda de dominio MEMORY §5.4).
+- **Vercel ✓ (cierre con token temporal del dueño):** Edwin renombró el
+  proyecto a `shikin` en el dashboard; el dominio por defecto NO cambia
+  solo con el rename, así que el coordinador (API v9 con token temporal,
+  revocado tras el uso) asignó **`shikin-elber01s-projects.vercel.app`**
+  (el `shikin.vercel.app` puro estaba tomado por otra cuenta:
+  `domain_taken`) y configuró `finzen-zeta.vercel.app` como **redirect
+  308** al nuevo. Env vars del proyecto: solo `DATABASE_URL` y
+  `NEXTAUTH_SECRET` — **NO existe `NEXTAUTH_URL`** (NextAuth v4 deriva
+  el origin de la request; el login funciona en la URL nueva sin
+  redeploy). Integración Git viva con el repo renombrado
+  `elber01/shikin` (productionBranch main). Smoke en la URL nueva:
+  title "Shikin" ✓ favicon PNG ✓ assets 200 ✓ API v1 401
+  `missing_api_key` ✓ redirect 308 ✓. `app.getfinzen.com` sigue
+  pendiente de repoint (deuda de dominio MEMORY §5.4).
 
 ### Verificación
 
