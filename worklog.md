@@ -6056,3 +6056,76 @@ NO rotaba al expandir — antiestético e inconsistente con el acordeón de
 | `src/components/finzen/dashboard-view.tsx` · `settings-view.tsx` | Bienvenida y footer vía i18n |
 | `src/app/layout.tsx` | `metadataBase` + título/keywords/authors/OG "Shikin" + OG image |
 | `src/types/next-auth.d.ts` · `src/lib/finzen/date-utils.ts` · `prisma/schema.prisma` · `src/app/globals.css` · `.env.example` · `package.json` · `README.md` · `SDD.md` · `AGENTS.md` · `agent.md` · `skills.md` · `agents/orchestrator.md` · `.opencode/agent/*.md` · `.opencode/skills/*/SKILL.md` · `MEMORY.md` · `worklog.md` | Comentarios/headers/cosmética del rebrand + memoria |
+
+---
+
+## PHASE 8.6 — Fix desbordamiento responsive en Transacciones (ingresos/gastos)
+
+**Task ID:** 8.6
+**Agent:** Coordinador → Planificador → Implementador → Revisor (Opción A aprobada por el dueño)
+**Status:** ✅ Cerrado — revisor APRUEBA, harness verde
+
+### Problema
+
+El dueño reportó desbordamiento en el módulo de Transacciones con los
+ingresos y gastos: las fuentes no se adaptan al tamaño de pantalla en una
+app responsiva. Causa raíz: el bloque Totals (Ingresos/Gastos/#) usaba
+`grid-cols-3` fijo con `text-lg` fijo — a 360px cada tarjeta quedaba con
+~77px útiles (shell `px-4` → 328px; 3 cols − gaps − `p-3` de Card) y un
+monto "RD$1,234,567.89" (~130px en semibold tabular-nums) desborda
+garantizado; a 320px eran ~64px.
+
+**Hallazgo crítico:** el working tree contenía un fix parcial HUÉRFANO
+sin commitear (solo el bloque Totals de `transactions-view.tsx`, 8+/5−)
+de una sesión interrumpida que no cerró protocolo (sin verify, commit ni
+memoria). El planificador lo auditó, lo declaró correcto (patrón exacto
+de reports-view L146/L149: `grid-cols-1 sm:grid-cols-3` + fuente por
+breakpoint) y quedó adoptado tal cual — este commit lo cierra completo.
+
+### Fix (19 líneas, solo classNames)
+
+1. `transactions-view.tsx` — adopción del fix huérfano: contenedor
+   `grid grid-cols-1 sm:grid-cols-3 gap-3 *:min-w-0`, montos `text-base
+   sm:text-lg ... break-words` (el dinero se envuelve, NUNCA con
+   ellipsis), contador `text-base sm:text-lg`.
+2. `transaction-row.tsx` L70 — nombre de cuenta en la línea meta:
+   `min-w-0 max-w-[160px]` → `min-w-0 truncate`. Una palabra larga sin
+   espacios desbordaba la fila; el cap de 160px era arbitrario también en
+   desktop; con `flex-wrap` el ellipsis solo aparece al exceder el ancho
+   de línea disponible.
+3. `add-transaction-sheet.tsx` — `w-full` en los 6 SelectTrigger From/To
+   (expense/income/transfer). La primitiva es `w-fit`: un nombre de
+   cuenta de ~200px desbordaba su celda `grid-cols-2` (~154px a 320px) y
+   sangraba sobre el select hermano; ahora el valor clampa con "…" como
+   los filtros de la vista. Trigger de moneda (`w-24 h-14`) intacto.
+4. Opción A (aprobada por el dueño) — padding del sheet + tabs: el form
+   gana `px-4 pb-6` (SheetContent no tiene padding propio y los inputs
+   tocaban los bordes) y los 3 TabsTrigger ganan `text-xs sm:text-sm
+   px-1.5 sm:px-2` (con el padding, las celdas del TabsList a 320px son
+   ~94px y "Transferencia" sangraría sin este ajuste).
+
+### Verificación
+
+- Harness: lint ✓ · typecheck ✓ · build ✓ (23 páginas, 31 rutas). NOTA
+  AMBIENTAL: `bun` no existe en este sandbox (CommandNotFoundException) —
+  las 3 barreras se ejecutaron con los binarios locales vía node
+  (`eslint .`, `tsc --noEmit`, `next build`), mismos comandos internos de
+  `bun run verify`; implementador y revisor las corrieron de forma
+  independiente tras reconciliar natives win32 de node_modules
+  (gitignored; lockfiles intactos). En un entorno con bun, correr
+  `bun run verify` para la confirmación canónica.
+- Revisor APRUEBA, 0 bloqueantes. Avisos no bloqueantes: (a) confirmar
+  con bun en entorno normal; (b) string inline es/en "Categoría
+  (origen)" en add-transaction-sheet es preexistente (clase de deuda
+  MEMORY §5.9, fuera de scope); (c) el truncate del nombre de cuenta
+  opera por min-w-0 + flex-wrap, conforme al plan.
+- Diff de contenido verificado: SOLO los 3 archivos de finzen (el resto
+  del tree es ruido mode-bit/CRLF preexistente de un checkout Windows).
+
+### Archivos
+
+| Archivo | Cambio |
+|---|---|
+| `src/components/finzen/transactions-view.tsx` | Totals responsive: 1 col en móvil + fuente escalada + break-words (fix huérfano adoptado; 8+/5−) |
+| `src/components/finzen/transaction-row.tsx` | `truncate` en nombre de cuenta de la meta (1 línea) |
+| `src/components/finzen/add-transaction-sheet.tsx` | `w-full` ×6 selects From/To + `px-4 pb-6` del form + tabs compactas (10+/10−) |

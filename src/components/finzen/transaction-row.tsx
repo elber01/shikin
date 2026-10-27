@@ -67,7 +67,7 @@ export function TransactionRow({ tx, onEdit }: TransactionRowProps) {
           {relevantAccount && (
             <>
               <span aria-hidden>·</span>
-              <span className="min-w-0 max-w-[160px]">{relevantAccount.name}</span>
+              <span className="min-w-0 truncate">{relevantAccount.name}</span>
             </>
           )}
         </div>

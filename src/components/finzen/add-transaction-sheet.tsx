@@ -316,23 +316,23 @@ export function AddTransactionSheet() {
           </SheetTitle>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-5 mt-4 px-4 pb-6">
           {/* Type selector */}
           <Tabs value={txType} onValueChange={(v) => setTxType(v as TxType)}>
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger
                 value="expense"
-                className="data-[state=active]:bg-expense-soft data-[state=active]:text-expense"
+                className="text-xs sm:text-sm px-1.5 sm:px-2 data-[state=active]:bg-expense-soft data-[state=active]:text-expense"
               >
                 {t['transactions.expense']}
               </TabsTrigger>
               <TabsTrigger
                 value="income"
-                className="data-[state=active]:bg-income-soft data-[state=active]:text-income"
+                className="text-xs sm:text-sm px-1.5 sm:px-2 data-[state=active]:bg-income-soft data-[state=active]:text-income"
               >
                 {t['transactions.income']}
               </TabsTrigger>
-              <TabsTrigger value="transfer">{t['transactions.transfer']}</TabsTrigger>
+              <TabsTrigger value="transfer" className="text-xs sm:text-sm px-1.5 sm:px-2">{t['transactions.transfer']}</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -378,7 +378,7 @@ export function AddTransactionSheet() {
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">{t['tx.fromAccount']}</Label>
                 <Select value={fromAccountId} onValueChange={setFromAccountId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>
@@ -395,7 +395,7 @@ export function AddTransactionSheet() {
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">{t['tx.toCategory']}</Label>
                 <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>
@@ -421,7 +421,7 @@ export function AddTransactionSheet() {
                   {locale === 'es' ? 'Categoría (origen)' : 'Category (source)'}
                 </Label>
                 <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>
@@ -439,7 +439,7 @@ export function AddTransactionSheet() {
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">{t['tx.toAccount']}</Label>
                 <Select value={toAccountId} onValueChange={setToAccountId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>
@@ -460,7 +460,7 @@ export function AddTransactionSheet() {
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">{t['tx.fromAccount']}</Label>
                 <Select value={fromAccountId} onValueChange={setFromAccountId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>
@@ -475,7 +475,7 @@ export function AddTransactionSheet() {
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">{t['tx.toAccount']}</Label>
                 <Select value={toAccountId} onValueChange={setToAccountId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger className="h-11 w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent>

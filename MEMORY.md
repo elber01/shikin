@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 26-oct-2026 (9 — Rebrand FinZen → Shikin completo: GitHub `elber01/shikin`, Vercel proyecto `shikin` + dominio `shikin-elber01s-projects.vercel.app` con redirect 308 del viejo)
+**Última actualización:** 27-oct-2026 (8.6 — Fix desbordamiento responsive en Transacciones: totals 1-col en móvil + fuente por breakpoint, truncate en nombre de cuenta, w-full en selects del sheet)
 
 ---
 
@@ -49,6 +49,7 @@
 | **8.4 — Pass UI/HIG producción** | FIX 1-6 del dueño: submit login `h-11 min-h-11` (≥44px), micro-feedback en primitivas (`active:brightness-95`, `duration-150`, hover primario oscurece 8% vía token `--primary-hover`), login con "¿Olvidaste tu contraseña?" (mailto real) + error inline que conserva el email, token `--shadow-card` (tinta #00274a) en login+dashboard, empty states completos (transactions/reports/categories), negativos semánticos (`text-expense`) y hex crudo de chrome eliminado. Revisor APRUEBA · verify ✓ | 22-oct-2026 |
 | **8.5 — Fix flechas dobles Ajustes** | Solicitud directa del dueño: cada acordeón de Ajustes mostraba 2 chevrons (uno manual sin rotación + el nativo de la primitiva). Eliminado el `ChevronDown` manual de `settings-view.tsx` y su import; queda el chevron nativo con rotación. verify ✓ (cambio trivial, sin flujo multiagente) | 25-oct-2026 |
 | **9 — Rebrand FinZen → Shikin** | Logo distintivo, favicon, metadata, docs; renames externos GitHub/Vercel; internals intactos | 26-oct-2026 |
+| **8.6 — Fix responsivo Transacciones** | Desbordamiento de ingresos/gastos en móvil: totals a 1 col + fuente por breakpoint (patrón reports-view), `truncate` en nombre de cuenta, `w-full` en selects del sheet + padding del form. Fix huérfano previo adoptado y cerrado. Revisor APRUEBA · verify ✓ | 27-oct-2026 |
 
 ## 3. Decisiones de arquitectura y su porqué
 
@@ -70,9 +71,35 @@
 | **PATCH v1 de cuentas con campos inmutables** | `currency`/`accountType` → `422 field_not_editable`; cambiarlos rompería la semántica del net worth. `currentBalance` = ajuste directo (saldos bancarios, sin recálculo) | `accounts-service.ts`, rutas v1 |
 | **Flujo multiagente coordinador→planificador→implementador→revisor** | El coordinador orquesta y es el único que cierra (harness + memoria); roles materializados como agentes de opencode con permisos (planificador/revisor read-only) | `.opencode/agent/`, `agent.md` §4 |
 
-## 4. Estado actual (26-oct-2026)
+## 4. Estado actual (27-oct-2026)
 
-**Barreras de calidad:** `bun run verify` (lint+typecheck+build) ✓ · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓.
+**Barreras de calidad:** verify (lint+typecheck+build) ✓ — corrido vía node, ver nota 8.6 (`bun` ausente en el sandbox actual) · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓.
+
+Sesión 27-oct-2026 (8.6 — Fix desbordamiento responsive en Transacciones;
+flujo coordinador→planificador→implementador→revisor, Opción A del dueño;
+revisor APRUEBA, 0 bloqueantes):
+- **Qué:** el módulo Transacciones desbordaba en pantallas pequeñas — los
+  totales de Ingresos/Gastos/# usaban 3 columnas fijas + fuente fija
+  (~77px útiles por tarjeta en un 360px vs montos de ~130px). Fix de 19
+  líneas de classNames en 3 archivos: (1) totals a `grid-cols-1
+  sm:grid-cols-3` + `text-base sm:text-lg` + `break-words` (el dinero se
+  envuelve, jamás ellipsis — patrón de reports-view); (2) nombre de
+  cuenta en la fila con `truncate` (antes `max-w-[160px]` sin clamp: una
+  palabra larga desbordaba); (3) `w-full` en los 6 selects Desde/Hacia
+  del sheet (eran `w-fit` y un nombre largo sangraba sobre el hermano) +
+  `px-4 pb-6` al form (inputs tocaban los bordes del sheet) + tabs
+  `text-xs sm:text-sm px-1.5 sm:px-2`.
+- **Fix huérfano adoptado:** el working tree traía el fix del bloque
+  Totals SIN commitear de una sesión interrumpida; auditado por el
+  planificador y mantenido tal cual — el commit 8.6 lo cierra con
+  verify + revisor + memoria.
+- **Verificación:** lint ✓ typecheck ✓ build ✓ (23 páginas) — vía node
+  con los binarios de `node_modules` (`bun` no existe en este sandbox);
+  el revisor re-ejecutó las 3 barreras de forma independiente. Correr
+  `bun run verify` en un entorno con bun para la confirmación canónica.
+- **Avisos del revisor:** string inline es/en "Categoría (origen)" en
+  add-transaction-sheet es preexistente (clase de deuda §5.9, fuera de
+  scope).
 
 Sesión 26-oct-2026 (9 — Rebrand FinZen → Shikin, flujo coordinador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
 - **Qué:** la app es **Shikin** en todo lo visible. Logo distintivo del dueño
@@ -331,6 +358,14 @@ pendiente de repoint (§5).
   los tests de la 7.9 pillaron que `account_id` era ignorado.
 - **El React Compiler es estricto:** memos con `new Date()` en deps no se
   pueden preservar — usar la convención de disable documentada, no pelearla.
+- **Diffs huérfanos en working tree:** sesiones interrumpidas pueden dejar
+  fixes sin commitear. Antes de planificar, separar el diff REAL
+  (`git -c core.filemode=false diff --ignore-cr-at-eol`) del ruido
+  mode-bit/CRLF que ensucia todo el tree en un checkout Windows.
+- **`bun` puede no existir en el sandbox:** si `bun` no está, las 3 barreras
+  de verify corren igual con node + los binarios de `node_modules`
+  (`eslint .`, `tsc --noEmit`, `next build`); si el tree vino de Linux,
+  reconciliar natives win32 con `npm install --no-save` (lockfiles intactos).
 
 ## 7. Personas y contexto
 
