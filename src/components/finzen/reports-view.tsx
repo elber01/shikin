@@ -143,22 +143,22 @@ export function ReportsView() {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 *:min-w-0">
         <Card className="p-4">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['reports.totalIncome']}</div>
-          <div className="text-xl sm:text-2xl font-bold tabular-nums text-income mt-1">
+          <div className="text-xl sm:text-2xl font-bold tabular-nums text-income break-words mt-1">
             {formatMoney(totals.income, baseCurrency as CurrencyCode, locale)}
           </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['reports.totalExpenses']}</div>
-          <div className="text-xl sm:text-2xl font-bold tabular-nums text-expense mt-1">
+          <div className="text-xl sm:text-2xl font-bold tabular-nums text-expense break-words mt-1">
             {formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)}
           </div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['reports.netSavings']}</div>
-          <div className={`text-xl sm:text-2xl font-bold tabular-nums mt-1${totals.savings < 0 ? ' text-expense' : ''}`}>
+          <div className={`text-xl sm:text-2xl font-bold tabular-nums break-words mt-1${totals.savings < 0 ? ' text-expense' : ''}`}>
             {formatMoney(totals.savings, baseCurrency as CurrencyCode, locale)}
           </div>
           <div className="text-xs text-muted-foreground">{totals.ratio.toFixed(1)}%</div>

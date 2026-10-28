@@ -175,7 +175,7 @@ export function DashboardView() {
           <Skeleton className="h-4 w-28" />
         </div>
         <Skeleton className="h-36 w-full rounded-xl" />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Skeleton className="h-28 rounded-xl" />
           <Skeleton className="h-28 rounded-xl" />
           <Skeleton className="h-28 rounded-xl" />
@@ -264,7 +264,7 @@ export function DashboardView() {
           />
 
           {/* Three KPI cards — deltas reales vs mes anterior */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 *:min-w-0">
             <KpiCard
               label={t['dashboard.income']}
               amount={formatMoney(totals.income, baseCurrency, locale)}

@@ -164,26 +164,25 @@ export function TransactionsView() {
         </div>
       </div>
 
-      {/* Totals — [responsive] grid-cols-1 en móvil: con 3 columnas fijas los montos
-          (sin espacios, p.ej. "RD$1,234,567.89") desbordaban tarjetas de ~77px útiles.
-          La fuente escala con el breakpoint (patrón de reports-view) y break-words
-          degrada por wrap en montos extremos — nunca se trunca dinero. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 *:min-w-0">
+      {/* Totals — [responsive] 3-col desde md (768px): con la escalera terminando en text-xl,
+          el peor monto realista (17 chars ≈ 183px) cabe en ~208px útiles; de 640-767px apiladas
+          con text-lg. break-words = última línea de defensa: el dinero se envuelve, jamás se trunca. */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 *:min-w-0">
         <Card className="p-3">
           <div className="text-xs text-muted-foreground">{t['dashboard.income']}</div>
-          <div className="text-base sm:text-lg font-bold tabular-nums text-income break-words">
+          <div className="text-base sm:text-lg md:text-xl font-bold tabular-nums text-income break-words">
             {formatMoney(totals.income, baseCurrency as CurrencyCode, locale)}
           </div>
         </Card>
         <Card className="p-3">
           <div className="text-xs text-muted-foreground">{t['dashboard.expenses']}</div>
-          <div className="text-base sm:text-lg font-bold tabular-nums text-expense break-words">
+          <div className="text-base sm:text-lg md:text-xl font-bold tabular-nums text-expense break-words">
             {formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)}
           </div>
         </Card>
         <Card className="p-3">
           <div className="text-xs text-muted-foreground">#</div>
-          <div className="text-base sm:text-lg font-bold tabular-nums">{totals.count}</div>
+          <div className="text-base sm:text-lg md:text-xl font-bold tabular-nums">{totals.count}</div>
         </Card>
       </div>
 

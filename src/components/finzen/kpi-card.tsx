@@ -99,7 +99,7 @@ export function KpiCard({
 
         <div
           className={cn(
-            'font-bold tabular-nums mt-1 tracking-tight',
+            'font-bold tabular-nums mt-1 tracking-tight break-words',
             size === 'hero' ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl'
           )}
           style={{ color: isGradient ? undefined : size === 'hero' ? 'var(--foreground)' : colorVar }}
