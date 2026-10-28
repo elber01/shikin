@@ -99,6 +99,10 @@ verificación es la barrera de calidad mínima.
 - Estados de carga: `Skeleton`; estados vacíos: mensaje + acción clara.
 - Accesibilidad: `aria-label` en botones de icono, `aria-current` en navegación
   activa, `aria-live` en feedback dinámico.
+- **Filas de stats responsive (convención 8.7):** un grid de stats 3-col se
+  apila bajo su breakpoint según el techo de fuente — `3-col desde md` si el
+  techo es `text-xl`, `desde lg` si es `text-2xl`; `*:min-w-0` en el grid;
+  montos con `break-words` (el dinero se envuelve, jamás ellipsis).
 
 ### React Compiler (importante)
 El ESLint usa React Compiler. Los `useMemo` cuyas dependencias derivan de

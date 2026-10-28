@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 27-oct-2026 (8.6 — Fix desbordamiento responsive en Transacciones: totals 1-col en móvil + fuente por breakpoint, truncate en nombre de cuenta, w-full en selects del sheet)
+**Última actualización:** 27-oct-2026 (8.7 — Responsive total de stats en todas las resoluciones: transactions md + escalera xl, reports/dashboard lg, KpiCard break-words; push a producción pendiente de re-auth GCM del dueño)
 
 ---
 
@@ -50,6 +50,7 @@
 | **8.5 — Fix flechas dobles Ajustes** | Solicitud directa del dueño: cada acordeón de Ajustes mostraba 2 chevrons (uno manual sin rotación + el nativo de la primitiva). Eliminado el `ChevronDown` manual de `settings-view.tsx` y su import; queda el chevron nativo con rotación. verify ✓ (cambio trivial, sin flujo multiagente) | 25-oct-2026 |
 | **9 — Rebrand FinZen → Shikin** | Logo distintivo, favicon, metadata, docs; renames externos GitHub/Vercel; internals intactos | 26-oct-2026 |
 | **8.6 — Fix responsivo Transacciones** | Desbordamiento de ingresos/gastos en móvil: totals a 1 col + fuente por breakpoint (patrón reports-view), `truncate` en nombre de cuenta, `w-full` en selects del sheet + padding del form. Fix huérfano previo adoptado y cerrado. Revisor APRUEBA · verify ✓ | 27-oct-2026 |
+| **8.7 — Responsive total de stats (todas las resoluciones)** | El dueño reportó que la adaptación solo se veía en móvil: el patrón `sm:grid-cols-3` + fuente grande desbordaba a 640-1023px en Transacciones y (peor, text-2xl) en Reports/Dashboard. Alcance sistémico aprobado: transactions `md:grid-cols-3` + escalera `text-base sm:text-lg md:text-xl`; reports/dashboard `lg:grid-cols-3` + `*:min-w-0` + `break-words` en montos; KpiCard `break-words`. Convención nueva documentada en AGENTS.md §5. Revisor APRUEBA · verify ✓ (node). Commit `421251e` + docs **sin push** — GCM headless no puede re-autenticar (lección §6) | 27-oct-2026 |
 
 ## 3. Decisiones de arquitectura y su porqué
 
@@ -74,6 +75,48 @@
 ## 4. Estado actual (27-oct-2026)
 
 **Barreras de calidad:** verify (lint+typecheck+build) ✓ — corrido vía node, ver nota 8.6 (`bun` ausente en el sandbox actual) · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓.
+
+**⚠️ PUSH PENDIENTE (desde 8.6):** `main` está **ahead 2** de origin/main — los
+commits `548c233` (8.6) y `421251e` (8.7) + el commit de docs del cierre 8.7
+existen SOLO localmente. El push falla en el sandbox: el cache de Git
+Credential Manager expiró y la re-autenticación requiere el popup interactivo
+que un shell headless no puede mostrar (lección §6). **Edwin debe correr
+`git push origin main` en una terminal normal de la máquina** (aparecerá el
+login de GitHub) — eso despliega 8.6+8.7 a Vercel. Smoke post-deploy
+sugerido: `/login` 200 y revisión visual de Totals en Transacciones/Reports/
+Dashboard con zoom 125-150%.
+
+Sesión 27-oct-2026 (8.7 — Responsive total de stats; flujo
+coordinador→planificador→implementador→revisor; alcance sistémico + push
+aprobados por el dueño; revisor APRUEBA, 0 bloqueantes):
+- **Síntoma:** el fix 8.6 solo adaptaba móvil — el dueño seguía viendo
+  desborde de ingresos/gastos en otras resoluciones ("todas las fuentes
+  deben variar según el tamaño de pantalla"). Causa: el patrón
+  `grid-cols-1 sm:grid-cols-3` + fuente grande desde 640px es sistémico y a
+  640-1023px (tablet vertical, laptops con zoom 125-150% de Windows) las 3
+  tarjetas quedan ~157-208px útiles: Transacciones iba justo con text-lg
+  (17 chars ≈ 155px), Reports/Dashboard desbordaban HOY con text-2xl
+  (≈198px en ~157px).
+- **Fix (~14+/15−, solo classNames en 4 archivos):** transactions-view
+  Totals `md:grid-cols-3` + escalera `text-base sm:text-lg md:text-xl`
+  (peor monto 17 chars ≈ 183px cabe en ~208px útiles de md); reports-view y
+  dashboard-view (KPIs + skeletons, mismo breakpoint para paridad de carga)
+  `lg:grid-cols-3` + `*:min-w-0` + `break-words` en los 3 montos (el
+  condicional `text-expense` de netSavings preservado); KpiCard
+  `break-words` (único consumidor: dashboard, verificado). TransactionRow
+  SIN cambios (monto `shrink-0 whitespace-nowrap` ya correcto). Se descartó
+  tipografía fluida clamp (sobre-ingeniería; la escalera es la convención
+  del repo) — decisión planificador+dueño.
+- **Spec primero:** convención nueva fijada en AGENTS.md §5 ("Filas de
+  stats responsive": apilar según techo de fuente, `*:min-w-0`,
+  `break-words` — wrap jamás ellipsis).
+- **Verificación:** lint ✓ typecheck ✓ build ✓ (23 páginas) vía node,
+  re-ejecutadas de forma independiente por el revisor. Commit `421251e`.
+  Avisos no bloqueantes: skeleton grid sin `*:min-w-0` (no-op sobre
+  Skeletons vacíos, opcional), ruido Prisma engines del sandbox en build
+  (ambiental), ruido mode-bit (preexistente).
+- **Escalación:** el push a producción quedó BLOQUEADO por credenciales
+  (ver aviso arriba) — reportado al dueño, no forzado.
 
 Sesión 27-oct-2026 (8.6 — Fix desbordamiento responsive en Transacciones;
 flujo coordinador→planificador→implementador→revisor, Opción A del dueño;
@@ -366,6 +409,14 @@ pendiente de repoint (§5).
   de verify corren igual con node + los binarios de `node_modules`
   (`eslint .`, `tsc --noEmit`, `next build`); si el tree vino de Linux,
   reconciliar natives win32 con `npm install --no-save` (lockfiles intactos).
+- **`git push` puede colgarse por Git Credential Manager headless:** si el
+  cache de credenciales de GitHub expira, GCM intenta abrir un popup de
+  login y el shell no-interactivo se cuelga sin error (o falla con
+  "Cannot prompt" con `credential.interactive=false`). No forzarlo: pedirle
+  al dueño que corra `git push origin main` en una terminal normal de su
+  máquina (ahí el popup sí aparece y refresca el cache para sesiones
+  futuras). Diagnóstico rápido: red OK (`Invoke-WebRequest github.com`)
+  + push colgado = credenciales, no red.
 
 ## 7. Personas y contexto
 
