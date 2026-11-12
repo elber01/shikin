@@ -6129,3 +6129,192 @@ breakpoint) y quedó adoptado tal cual — este commit lo cierra completo.
 | `src/components/finzen/transactions-view.tsx` | Totals responsive: 1 col en móvil + fuente escalada + break-words (fix huérfano adoptado; 8+/5−) |
 | `src/components/finzen/transaction-row.tsx` | `truncate` en nombre de cuenta de la meta (1 línea) |
 | `src/components/finzen/add-transaction-sheet.tsx` | `w-full` ×6 selects From/To + `px-4 pb-6` del form + tabs compactas (10+/10−) |
+
+## PHASE 8.7 — Responsive total de stats en todas las resoluciones (entrada retroactiva)
+
+> **Nota:** esta entrada se escribió el 12-nov-2026. El commit de cierre `8f573e3`
+> ("docs: cierre 8.7 — AGENTS convención responsive, memoria y worklog") actualizó
+> `AGENTS.md` y `MEMORY.md` pero **NO** añadió la entrada de worklog: la fase 8.7
+> quedó sin cronología en este archivo. Lección de `agent.md` §2 en la práctica.
+
+**Task ID:** 8.7 · **Status:** ✅ Cerrado (commit `421251e` + docs `8f573e3`, pusheado)
+
+El dueño reportó que el fix 8.6 solo adaptaba móvil. Causa raíz: el patrón
+`grid-cols-1 sm:grid-cols-3` + fuente grande desde 640px es sistémico; a
+640-1023px (tablet vertical, zoom 125-150%) las 3 tarjetas quedan ~157-208px
+útiles y los montos de `text-2xl` (~198px) desbordaban en Reports/Dashboard.
+
+Fix (solo classNames, 4 archivos): transactions `md:grid-cols-3` + escalera
+`text-base sm:text-lg md:text-xl`; reports/dashboard `lg:grid-cols-3` +
+`*:min-w-0` + `break-words` en los 3 montos; `KpiCard` `break-words`. Se
+descartó tipografía fluida clamp (sobre-ingeniería; la escalera es la
+convención del repo). Spec primero: AGENTS.md §5 ("Filas de stats
+responsive"). Verificación: lint ✓ typecheck ✓ build ✓ (23 páginas), revisor
+APRUEBA, commit `421251e`.
+
+---
+
+## PHASE 10 — Programa de mejora de UI/UX + agentes in-app · FASE U0 (higiene + bug de presupuestos)
+
+**Task ID:** 10-U0
+**Agent:** Coordinador → Planificador → Implementador → Revisor
+**Owner:** Edwin (aprobación explícita: 12-nov-2026 — opción "U0 — Higiene + 2 bugs de datos")
+**Status:** ✅ Cerrado — revisor APRUEBA, 0 bloqueantes, harness verde (3/3 exit 0)
+
+### Origen
+
+El dueño preguntó dos cosas en una: (A) cuánto se puede mejorar la UI de
+Shikin "en todo" y (B) si puede manejar sus agentes externos **dentro** de la
+app para no depender de una plataforma aparte. La respuesta del coordinador
+fue un diagnóstico grounded + un programa de fases, no un parche.
+
+Diagnóstico (inventario read-only del repo + revisor de plan): la base es
+sólida (tokens semánticos light/dark, doble entrada real, cero datos
+decorativos falsos, empty states, API v1 con 21/21 E2E, OCR e importador
+bancario). El problema es la capa encima:
+
+| # | Hallazgo | Evidencia |
+|---|---|---|
+| 1 | El 2/3 del design system es residuo de plantilla | 48 primitivas shadcn, 16 usadas / 32 sin usar; ~12 deps muertas (`@tanstack/*`, `@dnd-kit/*`, `next-intl`, `z-ai-web-dev-sdk`, `uuid`, `@mdxeditor/editor`…) |
+| 2 | La app estaba a medio i18n | ~274 strings bifurcadas `locale === 'es' ?` en 16 archivos → cambiar a EN dejaba la UI partida |
+| 3 | No hay design system propio | 5 escalas de KPI distintas, 3 copias del export CSV/JSON, 5 empty states, 7 diálogos CRUD, 5 `AlertDialog`, 11 call-sites del nombre localizado de categoría, 4 copias del loop de totales del mes |
+| 4 | Color de datos crudo | `Category.color` guarda HEX en BD (`prisma/seed.ts`) y se inyecta tal cual en los gráficos → rompe dark mode |
+| 5 | Cero drill-down + features muertas | botón "Exportar" de Reportes **sin `onClick`**; el rango `6M/1Y/all` no afectaba al gráfico (totales ≠ gráfica); etiqueta "12 meses" con 6 meses de datos en móvil; import promete `.xlsx` y solo acepta CSV; el idioma/moneda nunca se persisten (`updatePreferences` existe y nadie lo llama) |
+
+### Corrección al plan (verificada por el coordinador antes de implementar)
+
+El planificador reportó **2 bugs de pérdida de datos**. Al verificar el código
+resultó que **solo 1 existía**:
+
+- `deleteAccount` (`finzen-store.ts:271-279`) — **FALSO POSITIVO**. `apiFetch`
+  lanza antes del `set` (`store:125` → `throw` en !res.ok), así que un 409
+  nunca llega a mutar el estado local. Se dejó el código intacto y se mejoró
+  solo el mensaje (el toast mostraba un mensaje del servidor en inglés).
+- `addBudgetItem` (`finzen-store.ts:282-308`) — **BUG REAL**. Si ya existía un
+  presupuesto, solo mutaba el estado local con un id `temp_…` y **nunca
+  persistía** (el propio comentario lo admitía): la partida se perdía al
+  recargar.
+
+Consecuencia de alcance: el fix exige una ruta que no existía → se crea
+`POST /api/budgets/[budgetId]/items` con su servicio (`AGENTS.md` §5: la
+lógica de negocio vive en `src/lib/services/`, el handler es un adaptador
+delgado). El plan original decía "no tocar `src/app/api/**`"; se desvió
+explícitamente por correctness, no por conveniencia.
+
+### Qué se entregó
+
+**5 archivos nuevos**
+
+| Archivo | Qué es |
+|---|---|
+| `src/lib/finzen/export.ts` | Módulo PURO de export (sin DOM): `exportTransactionsCsv` / `exportTransactionsJson` / `buildExportRows` / `downloadTextFile`. CSV byte-idéntico al anterior (RFC 4180, escape de comillas) y **JSON con fidelidad de respaldo** (`id`, `tags`, `importSource` verbatim → compatible con `POST /api/restore`, que preserva IDs) |
+| `src/lib/finzen/localize.ts` | `localizedCategoryName` + helpers de locale — elimina el ternario `nameEs \|\| name` duplicado en las vistas |
+| `src/lib/finzen/date-locale.ts` | `dateFnsLocale(locale)` — sustituye ternarios `date-fns/locale` dispersos |
+| `src/lib/services/budgets-service.ts` | `addBudgetItemForUser()`: ownership del presupuesto (404), categoría propia o de sistema (422), monto finito ≥ 0 (422), threshold clamp 1..100 |
+| `src/app/api/budgets/[budgetId]/items/route.ts` | `POST` delgado: sesión NextAuth → 401; delega todo en el service; errores `{ error: "<snake_case>", message? }`; 201 con el item |
+
+**18 archivos modificados** (`src/components/finzen/**` + store + i18n): i18n
+completo (0 `locale === 'es' ?`), a11y (aria-labels por i18n, `<div onClick>`
+→ `<button>` nativo, CTAs a 44px), 0 `text-white`/`bg-white` en las vistas,
+export unificado en 4 sitios, botón "Exportar" de Reportes vivo (CSV+JSON
+con `DropdownMenu`), rango de Reportes ↔ gráfico ↔ totales alineados con
+`computeMonthlyFlows` como única fuente de verdad, Dashboard con la etiqueta
+del gráfico real ("Últimos {n} meses"), drag & drop real en Importar con copy
+honesto (solo CSV), y `apiFetch` propagando el `code` del servidor sin
+`as any` (clase `ApiError`) para que el 409 de cuentas muestre la causa real
+traducida **con el número de transacciones**.
+
+### Verificación
+
+- **Harness (3/3 exit 0, ejecutado de forma independiente por implementador,
+  revisor y coordinador):** `eslint.cmd .` ✓ · `tsc.cmd --noEmit` ✓ ·
+  `next.cmd build` ✓ (23 páginas, 31 rutas, incluida `ƒ /api/budgets/[budgetId]/items`).
+  `bun` no existe en este sandbox → binarios de `node_modules` (lección
+  `MEMORY.md` §6). Ruido ambiental preexistente: Prisma 6.19.2 generado para
+  `debian-openssl-3.0.x` registra `Query Engine ... runtime "windows"` durante
+  "Collecting page data" → no invalida el build (exit 0).
+- **Revisor: APRUEBA, 0 bloqueantes.** Verificó con comparador ejecutable que
+  el CSV nuevo es byte-idéntico al viejo (salvo el caso con `"`, donde el
+  inline antiguo emitía CSV **inválido** y el nuevo es el correcto); que no
+  hay IDOR en el endpoint nuevo (budget y categoría filtrados por
+  `session.user.id`); que el fix de presupuestos persiste (store → route →
+  service → prisma, y `loadData` rehidrata); que no hay regresión de doble
+  entrada ni de net worth (`finance.ts` sin tocar, ninguna `Transaction`
+  creada o modificada); y que `src/app/api/v1/**`, `prisma/schema.prisma`,
+  `package.json`, `src/lib/auth/**` y `src/components/ui/**` quedaron intactos.
+- **Greps de control:** `locale === 'es' ?` en `components/finzen/**` → 0 ·
+  `text-white`/`bg-white` en `components/finzen/**` → 0 · `as any` nuevos → 0
+  (quedan 2 preexistentes: `store:250`, `db.ts:310`) · paridad i18n verificada
+  por script: union 390 = es 390 = en 390, 0 duplicados, 0 huérfanas nuevas.
+- **Corrección post-revisión (3 avisos, resueltos antes de cerrar):** (1) el
+  JSON de respaldo perdía `id`/`tags`/`importSource` → restaurados verbatim
+  (el CSV no se tocó); (2) 3 claves i18n huérfanas introducidas por la fase
+  (`common.add`, `common.rows`, `bank.more`) → eliminadas; (3) 3 strings
+  visibles restantes en `settings-view` (`Email`, `2FA · WebAuthn`,
+  `bcrypt (12 rounds)`) → i18n. El aviso de la tilde de "Últimos" resultó
+  ser de un snapshot previo (verificado por codepoint: `Ú` U+00DA correcto).
+
+### Desviaciones del plan (todas justificadas en el reporte)
+
+1. `kpi-card.tsx` tocado (no estaba en la lista): era el único archivo de
+   `components/finzen/**` con `text-white`/`bg-white` y un color crudo →
+   tokens. Sin esto, el criterio "0 white" no era alcanzable sin tocar
+   `src/components/ui/**`.
+2. `transaction-row.tsx`: `<div role="button">` → `<button type="button">`
+   nativo, sin `aria-label` propio para no pisar el nombre accesible.
+3. Dashboard: un memo partido en dos al pasar a `computeMonthlyFlows` —
+   el React Compiler dejó de preservar la memoización; queda **un solo**
+   disable puntual `react-hooks/preserve-manual-memoization` (el caso
+   documentado en `AGENTS.md` §5).
+4. `localizedCategoryName` tiene 11 call-sites, no 14: `bank-import-flow.tsx`
+   hace *matching* de categorías, no las muestra.
+5. `src/components/ui/button.tsx` y `badge.tsx` conservan `text-white` en la
+   variante `destructive` — `AGENTS.md` §7 prohíbe tocar primitivas salvo
+   integración → queda como deuda (nuevo ítem en `MEMORY.md` §5).
+
+### Deuda que esta fase deja abierta (alimenta las fases siguientes)
+
+- **32 primitivas shadcn sin usar + ~12 deps muertas** → fase U1.
+- **Colores de categoría en HEX** (dato de BD, no color de tema) → fase U1
+  (tokens `--cat-1..12` + migración aditiva).
+- **union type de i18n manual** (~390 claves × 3 sitios) → fase U1
+  (tipado por el compilador: `keyof typeof translations.es`).
+- **Sin command palette** (`cmdk` ya instalado), **sin deep-link de filtros**,
+  **sin drill-down** → fases U2 y U4.
+- **Sin undo** tras borrados, sin error boundary, sin "Deshacer" → fase U3.
+- **`use-alerts.ts`** sigue resolviendo el nombre de categoría por su cuenta
+  (3 sitios) → debería usar `localizedCategoryName`.
+- **`text-white` en la variante `destructive`** de `ui/button.tsx` y
+  `ui/badge.tsx`.
+- **Cero tests automatizados** — la Fase 0 del roadmap (`SDD.md` §6) sigue
+  siendo el blocker de todo lo demás.
+
+### Decisiones del dueño para el bloque de agentes (aún no iniciado)
+
+- **Multiusuario (multi-tenant)** para la consola de agentes: la clave del
+  proveedor LLM será **por usuario**, cifrada en reposo, con cuotas. Esto
+  **duplica** el alcance de la fase de agentes frente a la opción de usuario
+  único (que el planificador recomendaba) → hay que correspondingly añadir
+  cifrado en reposo, aislamiento por usuario y cuotas por plan.
+- **Endpoint compatible con OpenAI** (`LLM_BASE_URL` configurable) como
+  proveedor del LLM server-side: una sola implementación de streaming +
+  tool-calls cubre Anthropic vía gateway, OpenAI, Groq y modelos locales
+  (Ollama). Cero dependencias nuevas (`fetch` nativo + `zod` ya instalado).
+- Orden recomendado para el bloque: **Fase 0 del roadmap** (Vitest + rate
+  limit compartido + deprecar `/api/agent/*`) → **Fase 1** (capa de servicios
+  completa) → **capa de tools + log auditable + undo** → **consola in-app**
+  (SSE, aprobación humana, streaming) → **servidor MCP** (misma capa de
+  tools). El `system_prompt` ya existe: es `agents/orchestrator.md`.
+
+### Archivos
+
+| Archivo | Cambio |
+|---|---|
+| `src/lib/finzen/export.ts` 🆕 | Export CSV/JSON puro, unificado, con fidelidad de respaldo |
+| `src/lib/finzen/localize.ts` 🆕 | `localizedCategoryName` + helpers de locale |
+| `src/lib/finzen/date-locale.ts` 🆕 | Locale de date-fns centralizado |
+| `src/lib/services/budgets-service.ts` 🆕 | `addBudgetItemForUser` (ownership + validaciones) |
+| `src/app/api/budgets/[budgetId]/items/route.ts` 🆕 | `POST` delgado para alta de partida |
+| `src/store/finzen-store.ts` | `ApiError` + `code`/`transactionCount`; `addBudgetItem` persiste |
+| `src/lib/finzen/i18n.ts` | 390 claves con paridad es/en estricta; 0 `locale === 'es' ?` |
+| `src/components/finzen/*.tsx` (17) | i18n, a11y, targets 44px, export unificado, rango/gráfico alineado, drag & drop real, 0 white |

@@ -4,6 +4,7 @@ import { Home, Receipt, Plus, BarChart3, Settings, Wallet, PieChart, FileUp, Men
 import { cn } from '@/lib/utils';
 import { useFinZenStore, type ViewKey } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
+import { otherLocale } from '@/lib/finzen/localize';
 import { useTheme } from 'next-themes';
 import Image from 'next/image';
 import { Moon, Sun } from 'lucide-react';
@@ -56,7 +57,7 @@ export function BottomTabBar() {
       <nav
         className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur-lg border-t border-border h-[72px] px-2"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        aria-label="Bottom navigation"
+        aria-label={t['a11y.bottomNav']}
       >
         <div className="flex items-center justify-around h-full max-w-md mx-auto">
           {LEFT_TABS.map((tab) => {
@@ -78,7 +79,7 @@ export function BottomTabBar() {
           {/* Center FAB */}
           <button
             onClick={() => setAddSheetOpen(true)}
-            className="relative -mt-8 w-14 h-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="relative -mt-8 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label={t['nav.add']}
           >
             <Plus className="w-6 h-6" />
@@ -107,6 +108,7 @@ export function BottomTabBar() {
             aria-current={MORE_VIEWS.includes(activeView) ? 'page' : undefined}
             aria-haspopup="dialog"
             aria-expanded={moreOpen}
+            aria-label={t['a11y.moreMenu']}
           >
             <Menu className="w-5 h-5" />
             <span className="text-[11px] font-medium">{t['nav.more']}</span>
@@ -181,16 +183,16 @@ export function MobileTopBar() {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setLocale(locale === 'es' ? 'en' : 'es')}
+            onClick={() => setLocale(otherLocale(locale))}
             className="px-2 py-1 rounded-md hover:bg-surface-2 text-xs font-semibold"
-            aria-label="Switch language"
+            aria-label={t['a11y.switchLanguage']}
           >
-            {locale === 'es' ? 'EN' : 'ES'}
+            {otherLocale(locale) === 'es' ? 'ES' : 'EN'}
           </button>
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="p-2 rounded-md hover:bg-surface-2"
-            aria-label="Toggle theme"
+            aria-label={t['a11y.toggleTheme']}
           >
             {mounted && theme === 'dark' ? (
               <Sun className="w-4 h-4" />

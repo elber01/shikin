@@ -22,6 +22,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useFinZenStore, type ViewKey } from '@/store/finzen-store';
 import { translations, type TranslationKey } from '@/lib/finzen/i18n';
+import { otherLocale } from '@/lib/finzen/localize';
 
 const NAV_ITEMS: { view: ViewKey; icon: typeof LayoutDashboard; key: TranslationKey }[] = [
   { view: 'dashboard', icon: LayoutDashboard, key: 'nav.dashboard' },
@@ -55,7 +56,7 @@ export function Sidebar() {
         'hidden lg:flex fixed inset-y-0 left-0 z-30 flex-col bg-surface border-r border-border transition-[width] duration-200',
         sidebarCollapsed ? 'w-16' : 'w-[280px]'
       )}
-      aria-label="Sidebar navigation"
+      aria-label={t['a11y.sidebar']}
     >
       {/* Header */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-border">
@@ -74,7 +75,7 @@ export function Sidebar() {
         <button
           onClick={toggleSidebar}
           className="p-2 rounded-md hover:bg-surface-2 text-muted-foreground"
-          aria-label="Toggle sidebar"
+          aria-label={t['a11y.toggleSidebar']}
         >
           {sidebarCollapsed ? (
             <ChevronRight className="w-4 h-4" />
@@ -136,7 +137,7 @@ export function Sidebar() {
             'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-surface-2',
             sidebarCollapsed && 'justify-center'
           )}
-          aria-label="Toggle theme"
+          aria-label={t['a11y.toggleTheme']}
         >
           {mounted && theme === 'dark' ? (
             <Sun className="w-5 h-5" />
@@ -149,16 +150,16 @@ export function Sidebar() {
         </button>
 
         <button
-          onClick={() => setLocale(locale === 'es' ? 'en' : 'es')}
+          onClick={() => setLocale(otherLocale(locale))}
           className={cn(
             'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-surface-2',
             sidebarCollapsed && 'justify-center'
           )}
-          aria-label="Switch language"
+          aria-label={t['a11y.switchLanguage']}
         >
           <Languages className="w-5 h-5" />
           {!sidebarCollapsed && (
-            <span>{locale === 'es' ? 'English' : 'Español'}</span>
+            <span>{t[otherLocale(locale) === 'es' ? 'common.spanish' : 'common.english']}</span>
           )}
         </button>
 

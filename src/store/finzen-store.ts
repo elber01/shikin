@@ -112,7 +112,11 @@ interface FinZenState {
   addAccount: (account: any) => Promise<void>;
   updateAccount: (id: string, patch: any) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
-  addBudgetItem: (item: any) => Promise<void>;
+  addBudgetItem: (item: {
+    categoryId: string;
+    plannedAmount: number;
+    alertThresholdPct?: number;
+  }) => Promise<void>;
   updateBudgetItem: (budgetId: string, itemId: string, patch: any) => Promise<void>;
   deleteBudgetItem: (id: string) => Promise<void>;
   addCategory: (cat: any) => Promise<void>;
@@ -120,6 +124,36 @@ interface FinZenState {
   deleteCategory: (id: string) => Promise<void>;
   updatePreferences: (prefs: any) => Promise<void>;
   resetStore: () => void;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** Body de error que devuelve la API interna. */
+interface ApiErrorBody {
+  error?: string;
+  message?: string;
+  code?: string;
+  transactionCount?: number;
+}
+
+/**
+ * Error de API con el código snake_case del servidor y sus datos extra
+ * (p. ej. el 409 `account_has_transactions` con el número de transacciones).
+ * La UI decide qué mensaje mostrar según `code`, no según el texto del
+ * servidor (que siempre viene en inglés).
+ */
+export class ApiError extends Error {
+  readonly code?: string;
+  readonly transactionCount?: number;
+
+  constructor(message: string, code?: string, transactionCount?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+    this.transactionCount = transactionCount;
+  }
 }
 
 async function apiFetch(url: string, options?: RequestInit) {
@@ -131,8 +165,21 @@ async function apiFetch(url: string, options?: RequestInit) {
     },
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'Request failed');
+    const raw: unknown = await res.json().catch(() => ({}));
+    const body: ApiErrorBody = isRecord(raw)
+      ? {
+          error: typeof raw.error === 'string' ? raw.error : undefined,
+          message: typeof raw.message === 'string' ? raw.message : undefined,
+          code: typeof raw.code === 'string' ? raw.code : undefined,
+          transactionCount:
+            typeof raw.transactionCount === 'number' ? raw.transactionCount : undefined,
+        }
+      : {};
+    throw new ApiError(
+      body.error || body.message || 'Request failed',
+      body.code,
+      body.transactionCount
+    );
   }
   return res.json();
 }
@@ -296,12 +343,20 @@ export const useFinZenStore = create<FinZenState>((set, get) => ({
       });
       set({ budget });
     } else {
-      // Add item to existing budget (would need a separate endpoint)
-      // For now, we'll just update locally
+      // Add a line to the EXISTING budget: it has to hit the server, otherwise
+      // the line only lived in memory and vanished on the next reload.
+      const created = await apiFetch(`/api/budgets/${state.budget.id}/items`, {
+        method: 'POST',
+        body: JSON.stringify({
+          categoryId: item.categoryId,
+          plannedAmount: Number(item.plannedAmount),
+          alertThresholdPct: item.alertThresholdPct,
+        }),
+      });
       set((s) => ({
         budget: s.budget ? {
           ...s.budget,
-          items: [...s.budget.items, { id: `temp_${Date.now()}`, ...item }],
+          items: [...s.budget.items, created],
         } : null,
       }));
     }

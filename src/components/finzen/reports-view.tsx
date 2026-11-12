@@ -4,6 +4,12 @@ import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Bar,
   BarChart,
   CartesianGrid,
@@ -14,38 +20,82 @@ import {
   YAxis,
 } from 'recharts';
 import { Download, Plus, BarChart3 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useFinZenStore } from '@/store/finzen-store';
-import { useIsMobile } from '@/hooks/use-is-mobile';
 import { translations } from '@/lib/finzen/i18n';
 import { convertAmount, formatMoney, type CurrencyCode } from '@/lib/finzen/currency';
+import { computeMonthlyFlows } from '@/lib/finzen/finance';
+import {
+  downloadTextFile,
+  exportFilename,
+  exportTransactionsCsv,
+  exportTransactionsJson,
+} from '@/lib/finzen/export';
+import { intlLocale, localizedCategoryName } from '@/lib/finzen/localize';
+
+type Range = '6m' | '1y' | 'all';
+
+/** Clave de mes natural (YYYY-MM) de una fecha. */
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export function ReportsView() {
-  const { transactions, categories, locale, baseCurrency, setAddSheetOpen } = useFinZenStore();
+  const { transactions, categories, accounts, locale, baseCurrency, setAddSheetOpen } = useFinZenStore();
   const t = translations[locale];
-  const isMobile = useIsMobile();
 
-  const [range, setRange] = useState<'6m' | '1y' | 'all'>('1y');
+  const [range, setRange] = useState<Range>('1y');
 
-  const filteredTx = useMemo(() => {
+  // ── Una sola fuente de verdad: los flujos mensuales delimitan el rango y
+  // alimentan a la vez el gráfico, los totales y la exportación. Antes el
+  // gráfico medía 6 meses fijos mientras los totales seguían otro periodo.
+  const flows = useMemo(() => {
     const now = new Date();
-    return transactions.filter((tx) => {
-      const d = new Date(tx.occurredOn);
-      if (range === '6m') return d >= new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      if (range === '1y') return d.getFullYear() === now.getFullYear();
-      return true;
-    });
-  }, [transactions, range]);
+    const endYear = now.getFullYear();
+    const endMonth = now.getMonth();
+    let months = range === '6m' ? 6 : 12;
+    if (range === 'all') {
+      let oldestYear = endYear;
+      let oldestMonth = endMonth;
+      for (const tx of transactions) {
+        const d = new Date(tx.occurredOn);
+        if (
+          d.getFullYear() < oldestYear ||
+          (d.getFullYear() === oldestYear && d.getMonth() < oldestMonth)
+        ) {
+          oldestYear = d.getFullYear();
+          oldestMonth = d.getMonth();
+        }
+      }
+      months = (endYear - oldestYear) * 12 + (endMonth - oldestMonth) + 1;
+    }
+    return computeMonthlyFlows(
+      transactions,
+      baseCurrency as CurrencyCode,
+      Math.max(1, months),
+      endYear,
+      endMonth
+    );
+  }, [transactions, baseCurrency, range]);
+
+  const rangeKeys = useMemo(() => new Set(flows.map((f) => f.key)), [flows]);
+
+  const filteredTx = useMemo(
+    () => transactions.filter((tx) => rangeKeys.has(monthKey(new Date(tx.occurredOn)))),
+    [transactions, rangeKeys]
+  );
 
   const totals = useMemo(() => {
-    let income = 0;
-    let expenses = 0;
-    for (const tx of filteredTx) {
-      const v = convertAmount(tx.amount, tx.currency, baseCurrency as CurrencyCode);
-      if (tx.type === 'income') income += v;
-      else if (tx.type === 'expense') expenses += v;
-    }
-    return { income, expenses, savings: income - expenses, ratio: income > 0 ? ((income - expenses) / income) * 100 : 0 };
-  }, [filteredTx, baseCurrency]);
+    const income = flows.reduce((s, f) => s + f.income, 0);
+    const expenses = flows.reduce((s, f) => s + f.expenses, 0);
+    const savings = income - expenses;
+    return {
+      income,
+      expenses,
+      savings,
+      ratio: income > 0 ? (savings / income) * 100 : 0,
+    };
+  }, [flows]);
 
   const topCategories = useMemo(() => {
     const map = new Map<string, number>();
@@ -58,7 +108,7 @@ export function ReportsView() {
       .map(([id, amount]) => {
         const cat = categories.find((c) => c.id === id);
         return {
-          name: cat ? (locale === 'es' ? (cat.nameEs || cat.name) : (cat.nameEn || cat.name)) : 'Other',
+          name: cat ? localizedCategoryName(cat, locale) : t['common.other'],
           icon: cat?.icon ?? '📦',
           color: cat?.color ?? 'var(--muted-foreground)',
           amount,
@@ -67,33 +117,37 @@ export function ReportsView() {
       })
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
-  }, [filteredTx, categories, baseCurrency, locale, totals]);
+  }, [filteredTx, categories, baseCurrency, locale, totals, t]);
 
   const chartData = useMemo(() => {
-    const baseCur = baseCurrency as CurrencyCode;
-    const now = new Date();
-    const intlLocale = locale === 'es' ? 'es-DO' : 'en-US';
-    const months: { key: string; label: string }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = new Intl.DateTimeFormat(intlLocale, { month: 'short' }).format(d);
-      months.push({ key, label });
+    const intl = intlLocale(locale);
+    return flows.map((f) => ({
+      month: new Intl.DateTimeFormat(intl, { month: 'short' }).format(new Date(f.year, f.month, 1)),
+      income: f.income,
+      expenses: f.expenses,
+    }));
+  }, [flows, locale]);
+
+  function exportRange(format: 'csv' | 'json') {
+    if (filteredTx.length === 0) {
+      toast.error(t['transactions.noTransactionsToExport']);
+      return;
     }
-    return months.map(({ key, label }) => {
-      let income = 0;
-      let expenses = 0;
-      for (const tx of transactions) {
-        const d = new Date(tx.occurredOn);
-        const txKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (txKey !== key) continue;
-        const v = convertAmount(tx.amount, tx.currency, baseCur);
-        if (tx.type === 'income') income += v;
-        else if (tx.type === 'expense') expenses += v;
-      }
-      return { month: label, income, expenses };
-    });
-  }, [transactions, baseCurrency, locale]);
+    const ctx = { categories, accounts, locale, baseCurrency: baseCurrency as CurrencyCode };
+    const content =
+      format === 'json'
+        ? exportTransactionsJson(filteredTx, ctx, {
+            exportedAt: new Date().toISOString(),
+            range,
+          })
+        : exportTransactionsCsv(filteredTx, ctx);
+    downloadTextFile(
+      exportFilename('finzen-reports', format),
+      content,
+      format === 'json' ? 'application/json' : 'text/csv'
+    );
+    toast.success(t['common.exported'].replace('{format}', format.toUpperCase()));
+  }
 
   // Empty state — usuario sin transacciones (tras TODOS los hooks, nunca antes)
   if (transactions.length === 0) {
@@ -108,7 +162,7 @@ export function ReportsView() {
           <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
             {t['reports.emptyHint']}
           </p>
-          <Button size="sm" onClick={() => setAddSheetOpen(true)}>
+          <Button size="sm" className="h-11 min-h-11" onClick={() => setAddSheetOpen(true)}>
             <Plus className="w-4 h-4 mr-1" />
             {t['reports.emptyCta']}
           </Button>
@@ -131,14 +185,26 @@ export function ReportsView() {
                   range === r ? 'bg-primary text-primary-foreground' : 'hover:bg-surface-2'
                 }`}
               >
-                {r === '6m' ? '6M' : r === '1y' ? '1Y' : locale === 'es' ? 'Todo' : 'All'}
+                {r === '6m' ? '6M' : r === '1y' ? '1Y' : t['reports.rangeAll']}
               </button>
             ))}
           </div>
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-1.5" />
-            {t['reports.export']}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-11 min-h-11" aria-label={t['reports.exportMenu']}>
+                <Download className="w-4 h-4 mr-1.5" />
+                {t['reports.export']}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportRange('csv')}>
+                {t['common.exportCsv']}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportRange('json')}>
+                {t['common.exportJson']}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

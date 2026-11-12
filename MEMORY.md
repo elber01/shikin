@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 27-oct-2026 (8.7 — Responsive total de stats en todas las resoluciones: transactions md + escalera xl, reports/dashboard lg, KpiCard break-words; push a producción pendiente de re-auth GCM del dueño)
+**Última actualización:** 12-nov-2026 (10-U0 — Fase U0 del programa de mejora UI/UX + agentes in-app: higiene visual (i18n completo, a11y, targets 44px, export unificado, rango↔gráfico de Reportes) + fix del bug que perdía las partidas de presupuesto al recargar; multi-tenant + endpoint OpenAI-compatible decididos para la futura consola de agentes)
 
 ---
 
@@ -51,6 +51,7 @@
 | **9 — Rebrand FinZen → Shikin** | Logo distintivo, favicon, metadata, docs; renames externos GitHub/Vercel; internals intactos | 26-oct-2026 |
 | **8.6 — Fix responsivo Transacciones** | Desbordamiento de ingresos/gastos en móvil: totals a 1 col + fuente por breakpoint (patrón reports-view), `truncate` en nombre de cuenta, `w-full` en selects del sheet + padding del form. Fix huérfano previo adoptado y cerrado. Revisor APRUEBA · verify ✓ | 27-oct-2026 |
 | **8.7 — Responsive total de stats (todas las resoluciones)** | El dueño reportó que la adaptación solo se veía en móvil: el patrón `sm:grid-cols-3` + fuente grande desbordaba a 640-1023px en Transacciones y (peor, text-2xl) en Reports/Dashboard. Alcance sistémico aprobado: transactions `md:grid-cols-3` + escalera `text-base sm:text-lg md:text-xl`; reports/dashboard `lg:grid-cols-3` + `*:min-w-0` + `break-words` en montos; KpiCard `break-words`. Convención nueva documentada en AGENTS.md §5. Revisor APRUEBA · verify ✓ (node). Commit `421251e` + docs **sin push** — GCM headless no puede re-autenticar (lección §6) | 27-oct-2026 |
+| **10-U0 — U0: higiene UI + bug de presupuestos** | Primera fase del programa "mejora UI/UX + agentes dentro de la app" (plan de 5 fases UI U0→U4 + bloque de agentes). Entrega: i18n completo (0 `locale === 'es' ?` en las vistas, 390 claves con paridad es/en), a11y (aria-labels i18n, `<div onClick>`→`<button>`, CTAs ≥44px), export CSV/JSON unificado en 4 sitios con fidelidad de respaldo, botón "Exportar" de Reportes revivido, rango↔gráfico↔totales alineados (`computeMonthlyFlows` como única fuente), drag & drop real en Importar con copy honesto (solo CSV), y **fix del bug real** `addBudgetItem` (no persistía: id `temp_…` en local → se perdía al recargar) con `POST /api/budgets/[budgetId]/items` + `src/lib/services/budgets-service.ts`. Revisor APRUEBA, 0 bloqueantes · harness 3/3 ✓ (node) | 12-nov-2026 |
 
 ## 3. Decisiones de arquitectura y su porqué
 
@@ -71,20 +72,26 @@
 | **DELETE de cuentas protege el historial (409)** | Un borrado duro deja transacciones huérfanas (SDD §7.7); el agente debe llevar saldos a 0 con PATCH, no borrar. El guard vive en el servicio y cubre v1 + ruta interna | `src/lib/services/accounts-service.ts` |
 | **PATCH v1 de cuentas con campos inmutables** | `currency`/`accountType` → `422 field_not_editable`; cambiarlos rompería la semántica del net worth. `currentBalance` = ajuste directo (saldos bancarios, sin recálculo) | `accounts-service.ts`, rutas v1 |
 | **Flujo multiagente coordinador→planificador→implementador→revisor** | El coordinador orquesta y es el único que cierra (harness + memoria); roles materializados como agentes de opencode con permisos (planificador/revisor read-only) | `.opencode/agent/`, `agent.md` §4 |
+| **Consola de agentes: multiusuario y endpoint OpenAI-compatible** (decidido por el dueño 12-nov-2026, **no implementado todavía**) | La clave del proveedor LLM será **por usuario** (cifrada en reposo, con cuotas) → aísla a cada usuario y permite revocar por separado, a costa de duplicar el alcance de la fase de agentes. El cliente será un **endpoint compatible con OpenAI** (`LLM_BASE_URL` configurable) → una sola implementación de streaming + tool-calls cubre Anthropic vía gateway, OpenAI, Groq y modelos locales, sin acoplar el código a un vendor y **sin dependencias nuevas** (`fetch` nativo + `zod` ya instalado) | `MEMORY.md` §4 (sesión 12-nov-2026), `worklog.md` PHASE 10 |
 
-## 4. Estado actual (27-oct-2026)
+## 4. Estado actual (12-nov-2026)
 
-**Barreras de calidad:** verify (lint+typecheck+build) ✓ — corrido vía node, ver nota 8.6 (`bun` ausente en el sandbox actual) · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓.
+**Barreras de calidad:** verify (lint+typecheck+build) ✓ — corrido vía node, ver nota 8.6 (`bun` ausente en el sandbox actual) · harness 3/3 exit 0 en la fase 10-U0 (ejecutado de forma independiente por implementador, revisor y coordinador) · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓.
 
-**⚠️ PUSH PENDIENTE (desde 8.6):** `main` está **ahead 2** de origin/main — los
-commits `548c233` (8.6) y `421251e` (8.7) + el commit de docs del cierre 8.7
-existen SOLO localmente. El push falla en el sandbox: el cache de Git
-Credential Manager expiró y la re-autenticación requiere el popup interactivo
-que un shell headless no puede mostrar (lección §6). **Edwin debe correr
-`git push origin main` en una terminal normal de la máquina** (aparecerá el
-login de GitHub) — eso despliega 8.6+8.7 a Vercel. Smoke post-deploy
-sugerido: `/login` 200 y revisión visual de Totals en Transacciones/Reports/
-Dashboard con zoom 125-150%.
+**⚠️ PUSH PENDIENTE (desde 8.6) RESUELTO 27-oct-2026:** los commits `548c233` (8.6), `421251e` (8.7) y `8f573e3` (docs cierre) fueron empujados a `main` y desplegados a Vercel (`shikin-elber01s-projects.vercel.app`). Smoke rápido: `/login` 200, branding Shikin presente. El aviso sobre GCM headless queda como lección para futuras sesiones.
+
+**⚠️ SIN COMMIT (desde 12-nov-2026):** la fase 10-U0 está implementada, revisada y verificada en el working tree, **sin commit ni push** (no se hace commit sin petición explícita del dueño).
+
+Sesión 12-nov-2026 (10-U0 — primera fase del programa UI/UX + agentes in-app; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
+- **Origen:** el dueño preguntó (A) cuánto se puede mejorar la UI "en todo" y (B) si puede manejar sus agentes externos dentro de la app sin depender de una plataforma aparte. El coordinador respondió con un diagnóstico grounded (inventario read-only del repo) + un programa de fases, no con un parche.
+- **Diagnóstico (5 ejes):** 32 de 48 primitivas shadcn sin usar + ~12 deps muertas (el 2/3 del design system es residuo de plantilla) · ~274 strings bifurcadas `locale === 'es' ?` en 16 archivos (i18n a medio aplicar) · 0 design system propio (5 escalas de KPI, 3 copias del export, 5 empty states, 7 diálogos CRUD, 4 copias del loop de totales) · `Category.color` en HEX crudo desde BD inyectado en los gráficos (rompe dark mode) · features muertas (botón "Exportar" de Reportes sin `onClick`, rango que no afectaba al gráfico, etiqueta "12 meses" con 6 meses de datos, import que promete `.xlsx` y solo acepta CSV, idioma/moneda que nunca se persisten).
+- **Corrección al plan (verificada antes de implementar):** de los "2 bugs de pérdida de datos" reportados, **solo 1 existía**. `deleteAccount` NO borra en cliente ante un 409: `apiFetch` lanza antes del `set` (`finzen-store.ts:125`). Se dejó intacto y solo se mejoró el mensaje. El bug real era `addBudgetItem` (`store:282-308`): con presupuesto existente solo mutaba el estado local con id `temp_…` y **nunca persistía** → la partida se perdía al recargar.
+- **Desviación de alcance justificada:** el fix exige una ruta que no existía → se crea `POST /api/budgets/[budgetId]/items` + `src/lib/services/budgets-service.ts` (ownership del presupuesto y de la categoría, validaciones, threshold clamp). El plan original excluía `src/app/api/**`; se desvió por correctness y por `AGENTS.md` §5 (lógica de negocio en `src/lib/services/`, handler delgado).
+- **Entregado:** 5 archivos nuevos + 18 modificados. i18n completo (390 claves, paridad es/en verificada por script, 0 huérfanas nuevas) · a11y (aria-labels i18n, `<div onClick>`→`<button>` nativo, CTAs ≥44px) · export CSV/JSON unificado en 4 sitios con **fidelidad de respaldo** (`id`/`tags`/`importSource` verbatim → compatible con `POST /api/restore`) · botón Exportar de Reportes revivido (CSV+JSON) · rango↔gráfico↔totales alineados con `computeMonthlyFlows` como única fuente · etiqueta real del gráfico (`common.lastMonths` con `{n}`) · drag & drop real en Importar con copy honesto (solo CSV) · `apiFetch` propaga `code`/`transactionCount` sin `as any` (clase `ApiError`) → el 409 de cuentas muestra la causa real traducida con el conteo.
+- **Verificación:** harness 3/3 exit 0 (eslint · tsc · next build con 23 páginas y 31 rutas) ejecutado por implementador, revisor y coordinador; greps de control en verde (`locale === 'es' ?` → 0, `text-white`/`bg-white` en vistas → 0, `as any` nuevos → 0); revisor verificó con comparador ejecutable que el CSV es byte-idéntico al anterior, que no hay IDOR en el endpoint nuevo, que el fix persiste (store→route→service→prisma) y que `api/v1/**`, `prisma/schema.prisma`, `package.json`, `lib/auth/**` y `components/ui/**` quedaron intactos.
+- **Corrección post-revisión (3 avisos, resueltos antes de cerrar):** el JSON de respaldo perdía `id`/`tags`/`importSource` → restaurados (el CSV no se tocó); 3 claves i18n huérfanas introducidas por la fase → eliminadas; 3 strings visibles restantes en `settings-view` → i18n. El aviso de la tilde de "Últimos" resultó de un snapshot previo (verificado por codepoint: `Ú` U+00DA).
+- **Memoria de la sesión 8.7:** el commit `8f573e3` ("docs: cierre 8.7 — AGENTS convención responsive, memoria y worklog") actualizó `AGENTS.md` y `MEMORY.md` pero **no** `worklog.md` → la fase 8.7 quedaba sin cronología. Cerrado el 12-nov-2026 con una entrada retroactiva en `worklog.md`.
+- **Decisiones del dueño para el bloque de agentes (NO iniciado):** **multiusuario (multi-tenant)** — la clave del proveedor LLM será por usuario, cifrada en reposo, con cuotas (esto **duplica** el alcance frente a la opción de usuario único que recomendaba el planificador) · **endpoint compatible con OpenAI** (`LLM_BASE_URL` configurable) como proveedor del LLM server-side, cero dependencias nuevas (`fetch` + `zod` ya instalado). Orden: Fase 0 del roadmap (Vitest + rate limit compartido + deprecar `/api/agent/*`) → Fase 1 (capa de servicios) → capa de tools + log auditable + undo → consola in-app (SSE + aprobación humana) → servidor MCP.
 
 Sesión 27-oct-2026 (8.7 — Responsive total de stats; flujo
 coordinador→planificador→implementador→revisor; alcance sistémico + push
@@ -366,10 +373,12 @@ pendiente de repoint (§5).
 8. **Dualidad `/api/v1` vs `/api/agent/*` (legacy):** las rutas agent duplican
    capacidades sin rate limit y con shape de error distinto (`{ error }`).
    Deprecar en la Fase 0 del roadmap de `SDD.md` §6 antes de exponer tools MCP.
-9. **Módulo Importar — i18n y a11y:** strings inline es/en y `<div>`s
-   clickeables sin `role="button"`/teclado, patrón preexistente replicado en
-   `bank-import-flow.tsx` (import-view/ocr-flow igual). Una pasada única de
-   i18n+a11y del módulo lo resuelve todo junto.
+9. **Módulo Importar — i18n y a11y:** ~~strings inline es/en y `<div>`s
+   clickeables sin `role="button"`/teclado~~ **RESUELTO (10-U0, 12-nov-2026):**
+   las 3 vistas del módulo (import-view, ocr-flow, bank-import-flow) pasaron a
+   i18n completo y sus zonas clickeables son `<button type="button">` nativos
+   con `focus-visible`. Se añadió además drag & drop real y el copy dejó de
+   prometer `.xlsx`/`.xls` (solo se soporta CSV).
 10. **`x_undefined` como cuenta virtual:** cuando el fuzzy-match de categoría
     falla, los asientos guardan `x_undefined` (convención heredada también de
     la API v1). Normalizar (categoría real "Sin categoría" o validación
@@ -387,6 +396,47 @@ pendiente de repoint (§5).
     `scripts/generate-brand-assets.js` tiene `DEFAULT_SRC` absoluto a
     `~/Downloads` (override `--src` existe; en clonación fresca convendría
     exigir `--src`).
+13. **Residuo de plantilla (detectado en 10-U0, sin resolver):** 32 de las 48
+    primitivas de `src/components/ui/` **no se usan** (`sidebar` 726 líneas,
+    `menubar`, `carousel`, `command`, `drawer`, `resizable`, `calendar`,
+    `breadcrumb`, `table`, `form`, `chart`…) y ~12 dependencias están
+    instaladas sin usar (`@tanstack/react-query`, `@tanstack/react-table`,
+    `@mdxeditor/editor`, `@dnd-kit/*`, `@reactuses/core`, `next-intl`,
+    `z-ai-web-dev-sdk`, `uuid`, `react-syntax-highlighter`,
+    `react-resizable-panels`). -> **Fase U1** (borrado + limpieza de
+    `package.json`). Ojo: `cmdk`, `zod` y `sonner` **sí** se usan o se van a
+    usar — no borrar.
+14. **`Category.color` guarda HEX en BD** (`prisma/seed.ts`,
+    `src/lib/finzen/default-categories.ts`) y se inyecta tal cual en los
+    gráficos (`dashboard-view.tsx`, `reports-view.tsx`) → los colores de datos
+    no respetan dark mode. Son **datos**, no color de tema. -> **Fase U1**:
+    tokens `--cat-1..12` + migración aditiva (mapa HEX→clave) + normalización
+    al escribir; el picker libre de color queda como deuda.
+15. **`TranslationKey` es un union type manual** (~390 claves × 3 sitios:
+    union + `es` + `en`). Cualquier clave nueva obliga a 3 ediciones. ->
+    **Fase U1**: derivar `TranslationKey` de `keyof typeof translations.es`
+    con `en` tipado `Record<TranslationKey, string>`.
+16. **`text-white` en la variante `destructive`** de `src/components/ui/button.tsx`
+    y `ui/badge.tsx`. `AGENTS.md` §7 prohíbe tocar primitivas salvo
+    integración → decisión del dueño pendiente (wrapper o excepción
+    documentada).
+17. **`src/hooks/use-alerts.ts` resuelve el nombre de categoría por su cuenta**
+    (3 sitios con `cat.nameEs || cat.name`) en vez de usar
+    `localizedCategoryName()` (creado en 10-U0). -> pendiente, 1 línea.
+18. **`apiFetch` devuelve `any`** (`res.json()` sin genérico) → el resultado de
+    los POST no se valida estáticamente contra el tipo de la entidad.
+    -> `apiFetch<T>` con genérico.
+19. **Multiusuario exigido para la consola de agentes** (decisión del dueño
+    12-nov-2026): la clave del proveedor LLM será **por usuario** → exige
+    cifrado en reposo, aislamiento por usuario y cuotas por plan. Duplica el
+    alcance de la fase de agentes frente a la opción de usuario único. La
+    Fase 0 del roadmap (`SDD.md` §6: rate limit compartido + Vitest) es
+    prerrequisito duro de esto.
+20. **Worklog de la fase 8.7 faltante:** el commit `8f573e3` actualizó
+    `AGENTS.md` y `MEMORY.md` pero no `worklog.md`. **RESUELTO 12-nov-2026**
+    (entrada retroactiva añadida en la fase 10-U0). Lección: un mensaje de
+    commit que promete "memoria y worklog" no es evidencia — auditar que
+    AMBOS archivos cambiaron.
 
 ## 6. Lecciones aprendidas (para no repetir errores)
 
@@ -417,6 +467,14 @@ pendiente de repoint (§5).
   máquina (ahí el popup sí aparece y refresca el cache para sesiones
   futuras). Diagnóstico rápido: red OK (`Invoke-WebRequest github.com`)
   + push colgado = credenciales, no red.
+- **Un hallazgo de un subagente es una hipótesis, no un hecho** (12-nov-2026):
+  el planificador reportó que `deleteAccount` borraba las transacciones en
+  el cliente pese al 409 del servidor; al leer el código, `apiFetch` lanzaba
+  **antes** del `set` → era un falso positivo. Un hallazgo de subagente se
+  verifica leyendo el código **antes** de escribirlo en el brief de
+  implementación, o el implementador "arregla" código correcto. Lo mismo
+  con el mensaje de un commit: `8f573e3` decía "memoria y worklog" y solo
+  actualizó 2 de los 3 archivos → auditar el diff real, no el mensaje.
 
 ## 7. Personas y contexto
 

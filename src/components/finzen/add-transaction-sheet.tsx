@@ -30,12 +30,13 @@ import { CalendarIcon, Paperclip, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 // [UX fix] "September 27th, 2026" en UI española — date-fns sin locale
 // formatea siempre en inglés. Localizamos según el idioma activo.
-import { es as dateFnsEs, enUS as dateFnsEn } from 'date-fns/locale';
+import { dateFnsLocale } from '@/lib/finzen/date-locale';
 import { toast } from 'sonner';
 import { useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { CURRENCIES, type CurrencyCode } from '@/lib/finzen/currency';
 import { toStorageISOString } from '@/lib/finzen/date-utils';
+import { localizedCategoryName } from '@/lib/finzen/localize';
 import type { TransactionType } from '@/store/finzen-store';
 
 type TxType = 'expense' | 'income' | 'transfer';
@@ -176,11 +177,7 @@ export function AddTransactionSheet() {
   function handleClose(open: boolean) {
     if (!open && isFormDirty() && !saving) {
       // Show confirmation only if the user will actually lose real changes
-      const confirmed = window.confirm(
-        locale === 'es'
-          ? '¿Seguro que quieres cerrar? Perderás los cambios no guardados.'
-          : 'Are you sure you want to close? You will lose unsaved changes.'
-      );
+      const confirmed = window.confirm(t['tx.closeConfirm']);
       if (!confirmed) return; // User cancelled, keep sheet open
     }
     setAddSheetOpen(open);
@@ -194,24 +191,24 @@ export function AddTransactionSheet() {
     e.preventDefault();
     const numericAmount = Number(amount.replace(',', '.'));
     if (!numericAmount || numericAmount <= 0) {
-      toast.error(t['tx.saveFailed'], { description: 'Invalid amount' });
+      toast.error(t['tx.saveFailed'], { description: t['tx.invalidAmount'] });
       return;
     }
     // Validation per type
     if (txType === 'expense' && !fromAccountId) {
-      toast.error(t['tx.saveFailed'], { description: 'Select source account' });
+      toast.error(t['tx.saveFailed'], { description: t['tx.selectSourceAccount'] });
       return;
     }
     if (txType === 'income' && !categoryId) {
-      toast.error(t['tx.saveFailed'], { description: 'Select income category' });
+      toast.error(t['tx.saveFailed'], { description: t['tx.selectIncomeCategory'] });
       return;
     }
     if (txType === 'income' && !toAccountId) {
-      toast.error(t['tx.saveFailed'], { description: 'Select destination account' });
+      toast.error(t['tx.saveFailed'], { description: t['tx.selectDestinationAccount'] });
       return;
     }
     if (txType === 'transfer' && (!fromAccountId || !toAccountId)) {
-      toast.error(t['tx.saveFailed'], { description: 'Select both accounts' });
+      toast.error(t['tx.saveFailed'], { description: t['tx.selectBothAccounts'] });
       return;
     }
 
@@ -240,7 +237,7 @@ export function AddTransactionSheet() {
     try {
       if (isEditMode && editingTransactionId) {
         await updateTransaction(editingTransactionId, payload);
-        toast.success(locale === 'es' ? 'Transacción actualizada' : 'Transaction updated');
+        toast.success(t['tx.updated']);
       } else {
         await addTransaction(payload);
         toast.success(t['tx.saved']);
@@ -264,9 +261,9 @@ export function AddTransactionSheet() {
     const tx = editingTx;
     try {
       await deleteTransaction(editingTransactionId);
-      toast.success(locale === 'es' ? 'Transacción eliminada' : 'Transaction deleted', {
+      toast.success(t['tx.deleted'], {
         action: {
-          label: locale === 'es' ? 'Deshacer' : 'Undo',
+          label: t['tx.undo'],
           onClick: async () => {
             if (!tx) return;
             try {
@@ -282,9 +279,9 @@ export function AddTransactionSheet() {
                 tags: tx.tags || '',
                 importSource: 'manual' as const,
               });
-              toast.success(locale === 'es' ? 'Transacción restaurada' : 'Transaction restored');
+              toast.success(t['tx.restored']);
             } catch {
-              toast.error(locale === 'es' ? 'No se pudo restaurar' : 'Could not restore');
+              toast.error(t['tx.restoreFailed']);
             }
           },
         },
@@ -292,7 +289,7 @@ export function AddTransactionSheet() {
       });
     } catch (err) {
       // [P0-2 fix] En error: NO cerrar — mostrar el fallo y mantener contexto
-      toast.error(locale === 'es' ? 'Error al eliminar' : 'Failed to delete');
+      toast.error(t['tx.deleteFailed']);
       return;
     }
     forceClose();
@@ -310,9 +307,7 @@ export function AddTransactionSheet() {
       >
         <SheetHeader>
           <SheetTitle className="text-xl sm:text-2xl font-bold">
-            {isEditMode
-              ? (locale === 'es' ? 'Editar Transacción' : 'Edit Transaction')
-              : t['tx.addTitle']}
+            {isEditMode ? t['tx.editTitle'] : t['tx.addTitle']}
           </SheetTitle>
         </SheetHeader>
 
@@ -403,7 +398,7 @@ export function AddTransactionSheet() {
                       <SelectItem key={c.id} value={c.id}>
                         <span className="flex items-center gap-2">
                           <span>{c.icon}</span>
-                          {locale === 'es' ? (c.nameEs || c.name) : (c.nameEn || c.name)}
+                          {localizedCategoryName(c, locale)}
                         </span>
                       </SelectItem>
                     ))}
@@ -418,7 +413,7 @@ export function AddTransactionSheet() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">
-                  {locale === 'es' ? 'Categoría (origen)' : 'Category (source)'}
+                  {t['tx.categorySource']}
                 </Label>
                 <Select value={categoryId} onValueChange={setCategoryId}>
                   <SelectTrigger className="h-11 w-full">
@@ -429,7 +424,7 @@ export function AddTransactionSheet() {
                       <SelectItem key={c.id} value={c.id}>
                         <span className="flex items-center gap-2">
                           <span>{c.icon}</span>
-                          {locale === 'es' ? (c.nameEs || c.name) : (c.nameEn || c.name)}
+                          {localizedCategoryName(c, locale)}
                         </span>
                       </SelectItem>
                     ))}
@@ -510,7 +505,7 @@ export function AddTransactionSheet() {
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full h-11 justify-start font-normal">
                   <CalendarIcon className="w-4 h-4 mr-2" />
-                  {format(date, 'PPP', { locale: locale === 'es' ? dateFnsEs : dateFnsEn })}
+                  {format(date, 'PPP', { locale: dateFnsLocale(locale) })}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -529,12 +524,12 @@ export function AddTransactionSheet() {
           <button
             type="button"
             className="w-full h-11 rounded-md border border-dashed border-border text-sm text-muted-foreground hover:bg-surface-2 flex items-center justify-center gap-2"
-            onClick={() => toast.info(locale === 'es' ? 'Carga de recibo — próximamente' : 'Receipt upload — coming soon')}
+            onClick={() => toast.info(t['tx.receiptSoon'])}
           >
             <Paperclip className="w-4 h-4" />
             {t['tx.attachReceipt']}
             <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-surface-2">
-              {locale === 'es' ? 'Próximamente' : 'Soon'}
+              {t['common.soon']}
             </span>
           </button>
 
@@ -548,7 +543,7 @@ export function AddTransactionSheet() {
                     variant="outline"
                     size="icon"
                     className="h-12 w-12 text-expense hover:bg-expense-soft hover:text-expense"
-                    aria-label="Delete"
+                    aria-label={t['a11y.delete']}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -556,23 +551,21 @@ export function AddTransactionSheet() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      {locale === 'es' ? '¿Eliminar transacción?' : 'Delete transaction?'}
+                      {t['tx.deleteTitle']}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      {locale === 'es'
-                        ? 'Esta acción no se puede deshacer. La transacción se eliminará permanentemente.'
-                        : 'This action cannot be undone. The transaction will be permanently deleted.'}
+                      {t['tx.deleteBody']}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>
-                      {locale === 'es' ? 'Cancelar' : 'Cancel'}
+                      {t['common.cancel']}
                     </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={handleDelete}
-                      className="bg-expense text-white hover:bg-expense/90"
+                      className="bg-expense text-primary-foreground hover:bg-expense/90"
                     >
-                      {locale === 'es' ? 'Eliminar' : 'Delete'}
+                      {t['common.delete']}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -594,7 +587,7 @@ export function AddTransactionSheet() {
               {saving
                 ? t['tx.saving']
                 : isEditMode
-                ? (locale === 'es' ? 'Guardar Cambios' : 'Save Changes')
+                ? t['common.saveChanges']
                 : t['tx.save']}
             </Button>
           </div>

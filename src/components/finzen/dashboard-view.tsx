@@ -28,7 +28,9 @@ import {
   computeMonthlyFlows,
   computeNetWorthHistory,
   computeDelta,
+  type MonthlyFlow,
 } from '@/lib/finzen/finance';
+import { intlLocale, localizedCategoryName, localizedPair } from '@/lib/finzen/localize';
 import { KpiCard } from '@/components/finzen/kpi-card';
 import { TransactionRow } from '@/components/finzen/transaction-row';
 import { useAlerts } from '@/hooks/use-alerts';
@@ -64,21 +66,19 @@ export function DashboardView() {
 
   // ── KPIs del mes seleccionado (en moneda base) + mes anterior para deltas reales
   const { totals, prevTotals } = useMemo(() => {
-    const sum = (year: number, month: number) => {
-      let income = 0;
-      let expenses = 0;
-      for (const tx of transactions) {
-        const d = new Date(tx.occurredOn);
-        if (d.getMonth() !== month || d.getFullYear() !== year) continue;
-        const v = convertAmount(tx.amount, tx.currency, baseCurrency);
-        if (tx.type === 'income') income += v;
-        else if (tx.type === 'expense') expenses += v;
-      }
-      const savings = income - expenses;
-      const ratio = income > 0 ? (savings / income) * 100 : 0;
-      return { income, expenses, savings, ratio };
+    // computeMonthlyFlows es la única fuente de verdad de los flujos por mes.
+    const current = computeMonthlyFlows(transactions, baseCurrency, 1, viewYear, viewMonth)[0];
+    const previous = computeMonthlyFlows(transactions, baseCurrency, 2, viewYear, viewMonth - 1)[0];
+    const toTotals = (flow: MonthlyFlow) => {
+      const savings = flow.income - flow.expenses;
+      return {
+        income: flow.income,
+        expenses: flow.expenses,
+        savings,
+        ratio: flow.income > 0 ? (savings / flow.income) * 100 : 0,
+      };
     };
-    return { totals: sum(viewYear, viewMonth), prevTotals: sum(viewYear, viewMonth - 1) };
+    return { totals: toTotals(current), prevTotals: toTotals(previous) };
   // eslint-disable-next-line react-hooks/preserve-manual-memoization -- viewDate deriva de new Date() (impuro), el compiler no puede preservar
   }, [transactions, viewYear, viewMonth, baseCurrency]);
 
@@ -120,7 +120,7 @@ export function DashboardView() {
       .map(([catId, amount]) => {
         const cat = categories.find((c) => c.id === catId);
         return {
-          name: cat ? (locale === 'es' ? (cat.nameEs || cat.name) : (cat.nameEn || cat.name)) : 'Other',
+          name: cat ? localizedCategoryName(cat, locale) : t['common.other'],
           value: amount,
           color: cat?.color ?? 'var(--muted-foreground)',
           icon: cat?.icon ?? '📦',
@@ -129,35 +129,33 @@ export function DashboardView() {
       .sort((a, b) => b.value - a.value);
     return result;
   // eslint-disable-next-line react-hooks/preserve-manual-memoization -- idem: deps derivan de new Date()
-  }, [transactions, viewYear, viewMonth, categories, baseCurrency, locale]);
+  }, [transactions, viewYear, viewMonth, categories, baseCurrency, locale, t]);
 
   // ── Cash flow chart data — 12 meses (6 en móvil), computed from real transactions
-  const cashFlowData = useMemo(() => {
-    const baseCur = baseCurrency as CurrencyCode;
-    const intlLocale = locale === 'es' ? 'es-DO' : 'en-US';
+  // Los flujos se calculan en su propio memo (como en reports-view) para que el
+  // React Compiler pueda preservar ambas memos sinmemorizar un array mutado.
+  const cashFlowFlows = useMemo(() => {
     const monthsBack = isMobile ? 6 : 12;
-    const months: { key: string; label: string }[] = [];
-    for (let i = monthsBack - 1; i >= 0; i--) {
-      const d = new Date(viewYear, viewMonth - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = new Intl.DateTimeFormat(intlLocale, { month: 'short' }).format(d);
-      months.push({ key, label });
-    }
-    return months.map(({ key, label }) => {
-      let income = 0;
-      let expenses = 0;
-      for (const tx of transactions) {
-        const d = new Date(tx.occurredOn);
-        const txKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (txKey !== key) continue;
-        const v = convertAmount(tx.amount, tx.currency, baseCur);
-        if (tx.type === 'income') income += v;
-        else if (tx.type === 'expense') expenses += v;
-      }
-      return { month: label, income, expenses };
-    });
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- idem: deps derivan de new Date()
-  }, [transactions, viewYear, viewMonth, baseCurrency, locale, isMobile]);
+    return computeMonthlyFlows(
+      transactions,
+      baseCurrency as CurrencyCode,
+      monthsBack,
+      viewYear,
+      viewMonth
+    );
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- viewDate deriva de new Date() (impuro), el compiler no puede preservar
+  }, [transactions, viewYear, viewMonth, baseCurrency, isMobile]);
+
+  const cashFlowData = useMemo(() => {
+    const intl = intlLocale(locale);
+    return cashFlowFlows.map((flow) => ({
+      month: new Intl.DateTimeFormat(intl, { month: 'short' }).format(
+        new Date(flow.year, flow.month, 1)
+      ),
+      income: flow.income,
+      expenses: flow.expenses,
+    }));
+  }, [cashFlowFlows, locale]);
 
   // ── Recent transactions (top 5)
   const recent = [...transactions]
@@ -169,7 +167,7 @@ export function DashboardView() {
   // (Colocado tras TODOS los hooks para respetar rules-of-hooks.)
   if (loading) {
     return (
-      <div className="space-y-6" aria-busy="true" aria-label="Cargando panel">
+      <div className="space-y-6" aria-busy="true" aria-label={t['a11y.loadingPanel']}>
         <div className="space-y-2">
           <Skeleton className="h-8 w-44" />
           <Skeleton className="h-4 w-28" />
@@ -201,7 +199,7 @@ export function DashboardView() {
             value={selectedMonth || `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}`}
             onChange={(e) => setSelectedMonth(e.target.value)}
             className="h-9 text-xs rounded-md border border-border bg-surface-2 px-2 text-foreground"
-            aria-label={locale === 'es' ? 'Seleccionar mes' : 'Select month'}
+            aria-label={t['common.selectMonth']}
           />
           {selectedMonth && (
             <Button
@@ -210,7 +208,7 @@ export function DashboardView() {
               onClick={() => setSelectedMonth('')}
               className="h-9 text-xs"
             >
-              {locale === 'es' ? 'Hoy' : 'Today'}
+              {t['common.today']}
             </Button>
           )}
           <Button onClick={() => setAddSheetOpen(true)} className="h-10">
@@ -229,16 +227,14 @@ export function DashboardView() {
             {t['auth.welcome']}
           </h2>
           <p className="text-sm text-muted-foreground mb-5 max-w-md mx-auto">
-            {locale === 'es'
-              ? 'Tu base de datos está limpia. Comienza creando tu primera cuenta para registrar transacciones y ver tus finanzas crecer.'
-              : 'Your database is clean. Start by creating your first account to record transactions and watch your finances grow.'}
+            {t['dashboard.emptyHint']}
           </p>
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
             <Button onClick={() => setActiveView('accounts')}>
-              {locale === 'es' ? '➕ Crear cuenta' : '➕ Create account'}
+              {t['dashboard.emptyCreateAccount']}
             </Button>
             <Button variant="outline" onClick={() => setAddSheetOpen(true)}>
-              {locale === 'es' ? 'Registrar transacción' : 'Record transaction'}
+              {t['dashboard.emptyRecordTransaction']}
             </Button>
           </div>
         </Card>
@@ -297,7 +293,9 @@ export function DashboardView() {
           <Card className="p-5 shadow-card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">{t['dashboard.cashFlow']}</h2>
-              <span className="text-xs text-muted-foreground">12 {locale === 'es' ? 'meses' : 'months'}</span>
+              <span className="text-xs text-muted-foreground">
+                {t['common.lastMonths'].replace('{n}', String(cashFlowData.length))}
+              </span>
             </div>
             <div className="h-56 sm:h-64 w-full overflow-x-auto scroll-area">
               <div className="h-full min-w-0">
@@ -450,10 +448,10 @@ export function DashboardView() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium">
-                            {locale === 'es' ? alert.titleEs : alert.titleEn}
+                            {localizedPair(alert.titleEs, alert.titleEn, locale)}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
-                            {locale === 'es' ? alert.messageEs : alert.messageEn}
+                            {localizedPair(alert.messageEs, alert.messageEn, locale)}
                           </div>
                         </div>
                       </div>
@@ -462,9 +460,7 @@ export function DashboardView() {
                 </div>
               ) : (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  {locale === 'es'
-                    ? 'No hay alertas. ¡Todo bajo control! ✓'
-                    : 'No alerts. All under control! ✓'}
+                  {t['dashboard.noAlerts']}
                 </div>
               )}
             </Card>

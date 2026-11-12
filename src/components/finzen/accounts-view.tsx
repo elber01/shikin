@@ -9,10 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Wallet, CreditCard, Banknote, Bitcoin, Coins, PiggyBank, Plus, Building2, Pencil, Trash2 } from 'lucide-react';
-import { useFinZenStore } from '@/store/finzen-store';
+import { ApiError, useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { CURRENCIES, formatMoney, convertAmount, type CurrencyCode } from '@/lib/finzen/currency';
 import { computeNetWorth, computeTotalAssets, computeTotalLiabilities } from '@/lib/finzen/finance';
+import { localizedPair } from '@/lib/finzen/localize';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -52,11 +53,11 @@ export function AccountsView() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) { toast.error(locale === 'es' ? 'Nombre requerido' : 'Name required'); return; }
+    if (!name.trim()) { toast.error(t['common.nameRequired']); return; }
     const payload = { name: name.trim(), subType, accountType, currency, currentBalance: Number(balance.replace(',', '.')) || 0, institution: institution.trim() || undefined };
     try {
-      if (editingId) { await updateAccount(editingId, payload); toast.success(locale === 'es' ? 'Cuenta actualizada' : 'Account updated'); }
-      else { await addAccount(payload); toast.success(locale === 'es' ? 'Cuenta creada' : 'Account created'); }
+      if (editingId) { await updateAccount(editingId, payload); toast.success(t['accounts.updated']); }
+      else { await addAccount(payload); toast.success(t['accounts.created']); }
       closeDialog();
     } catch (err) { toast.error(String(err).replace('Error: ', '')); }
   }
@@ -64,10 +65,18 @@ export function AccountsView() {
   async function handleDelete(id: string) {
     try {
       await deleteAccount(id);
-      toast.success(locale === 'es' ? 'Cuenta eliminada' : 'Account deleted');
+      toast.success(t['accounts.deleted']);
     } catch (err) {
-      const msg = (err as Error).message;
-      toast.error(locale === 'es' ? `No se pudo eliminar: ${msg}` : `Could not delete: ${msg}`);
+      // El 409 de "cuenta con historial" llega con código + número de
+      // transacciones: el mensaje va en el idioma del usuario, no en inglés.
+      if (err instanceof ApiError && err.code === 'account_has_transactions') {
+        toast.error(
+          t['accounts.errorHasTransactions'].replace('{n}', String(err.transactionCount ?? 0))
+        );
+        return;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(t['accounts.deleteFailed'].replace('{message}', msg));
     }
   }
 
@@ -84,33 +93,33 @@ export function AccountsView() {
     return (
       <form onSubmit={handleSave} className="space-y-4 mt-2">
         <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">{locale === 'es' ? 'Nombre' : 'Name'}</Label>
-          <Input value={name} onChange={e => setName(e.target.value)} placeholder={locale === 'es' ? 'ej. Cuenta BHD' : 'e.g. BHD Checking'} className="h-11" required />
+          <Label className="text-xs text-muted-foreground">{t['accounts.name']}</Label>
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder={t['accounts.namePlaceholder']} className="h-11" required />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">{locale === 'es' ? 'Tipo de cuenta' : 'Account type'}</Label>
+            <Label className="text-xs text-muted-foreground">{t['accounts.type']}</Label>
             <Select value={accountType} onValueChange={setAccountType}>
               <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="asset">{locale === 'es' ? 'Activo (mi dinero)' : 'Asset (my money)'}</SelectItem>
-                <SelectItem value="liability">{locale === 'es' ? 'Pasivo (deuda)' : 'Liability (debt)'}</SelectItem>
+                <SelectItem value="asset">{t['accounts.asset']}</SelectItem>
+                <SelectItem value="liability">{t['accounts.liability']}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">{locale === 'es' ? 'Subtipo' : 'Subtype'}</Label>
+            <Label className="text-xs text-muted-foreground">{t['accounts.subtype']}</Label>
             <Select value={subType} onValueChange={setSubType}>
               <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
               <SelectContent>{SUB_TYPES.map(st => { const m = SUB_TYPE_META[st]; const Ic = m.icon; return (
-                <SelectItem key={st} value={st}><span className="flex items-center gap-2"><Ic className="w-4 h-4" />{locale === 'es' ? m.labelEs : m.label}</span></SelectItem>
+                <SelectItem key={st} value={st}><span className="flex items-center gap-2"><Ic className="w-4 h-4" />{localizedPair(m.labelEs, m.label, locale)}</span></SelectItem>
               ); })}</SelectContent>
             </Select>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">{locale === 'es' ? 'Moneda' : 'Currency'}</Label>
+            <Label className="text-xs text-muted-foreground">{t['common.currency']}</Label>
             <Select value={currency} onValueChange={v => setCurrency(v as CurrencyCode)}>
               <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
               <SelectContent>{Object.entries(CURRENCIES).map(([code, m]) => (
@@ -121,15 +130,15 @@ export function AccountsView() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">{accountType === 'liability' ? (locale === 'es' ? 'Monto de deuda' : 'Debt amount') : (locale === 'es' ? 'Saldo' : 'Balance')}</Label>
+            <Label className="text-xs text-muted-foreground">{accountType === 'liability' ? t['accounts.debtAmount'] : t['accounts.balance']}</Label>
             <Input type="text" inputMode="decimal" value={balance} onChange={e => setBalance(e.target.value.replace(/[^\d.,-]/g, ''))} placeholder="0.00" className="h-11 font-mono text-right" />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">{locale === 'es' ? 'Institución' : 'Institution'}</Label>
-            <Input value={institution} onChange={e => setInstitution(e.target.value)} placeholder={locale === 'es' ? 'opcional' : 'optional'} className="h-11" />
+            <Label className="text-xs text-muted-foreground">{t['accounts.institution']}</Label>
+            <Input value={institution} onChange={e => setInstitution(e.target.value)} placeholder={t['common.optional']} className="h-11" />
           </div>
         </div>
-        <Button type="submit" className="w-full h-11">{editingId ? (locale === 'es' ? 'Guardar Cambios' : 'Save Changes') : (locale === 'es' ? 'Crear cuenta' : 'Create account')}</Button>
+        <Button type="submit" className="w-full h-11">{editingId ? t['common.saveChanges'] : t['accounts.create']}</Button>
       </form>
     );
   }
@@ -138,26 +147,26 @@ export function AccountsView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl sm:text-2xl font-bold">{t['nav.accounts']}</h1>
-        <Button size="sm" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{locale === 'es' ? 'Nueva cuenta' : 'New account'}</Button>
+        <Button size="sm" className="h-11 min-h-11" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{t['accounts.new']}</Button>
       </div>
       <Dialog open={createOpen} onOpenChange={o => { if (!o) closeDialog(); }}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editingId ? (locale === 'es' ? 'Editar cuenta' : 'Edit account') : (locale === 'es' ? 'Crear cuenta' : 'Create account')}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingId ? t['accounts.edit'] : t['accounts.create']}</DialogTitle></DialogHeader>
           {renderForm()}
         </DialogContent>
       </Dialog>
       <Card className="p-5 bg-gradient-to-br from-surface to-surface-2">
         <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['dashboard.netWorth']}</div>
         <div className="text-3xl sm:text-4xl font-bold tabular-nums mt-1">{formatMoney(netWorth, baseCurrency as CurrencyCode, locale)}</div>
-        <div className="text-xs text-muted-foreground mt-1">{locale === 'es' ? 'Total en' : 'Total in'} {baseCurrency}</div>
+        <div className="text-xs text-muted-foreground mt-1">{t['accounts.totalIn']} {baseCurrency}</div>
         {/* Assets vs Liabilities breakdown */}
         {totalLiabilities > 0 && (
           <div className="flex flex-wrap gap-3 mt-3 text-xs">
             <span className="px-2 py-1 rounded-md bg-income-soft text-income">
-              {locale === 'es' ? 'Activos' : 'Assets'}: {formatMoney(totalAssets, baseCurrency as CurrencyCode, locale, { compact: true })}
+              {t['accounts.assets']}: {formatMoney(totalAssets, baseCurrency as CurrencyCode, locale, { compact: true })}
             </span>
             <span className="px-2 py-1 rounded-md bg-expense-soft text-expense">
-              {locale === 'es' ? 'Pasivos' : 'Liabilities'}: −{formatMoney(totalLiabilities, baseCurrency as CurrencyCode, locale, { compact: true })}
+              {t['accounts.liabilities']}: −{formatMoney(totalLiabilities, baseCurrency as CurrencyCode, locale, { compact: true })}
             </span>
           </div>
         )}
@@ -172,9 +181,9 @@ export function AccountsView() {
       {accounts.length === 0 ? (
         <Card className="p-8 text-center">
           <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3"><Building2 className="w-7 h-7 text-muted-foreground" /></div>
-          <h3 className="text-lg font-semibold mb-1">{locale === 'es' ? 'No tienes cuentas aún' : 'No accounts yet'}</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">{locale === 'es' ? 'Crea tu primera cuenta para comenzar.' : 'Create your first account.'}</p>
-          <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1" />{locale === 'es' ? 'Crear cuenta' : 'Create account'}</Button>
+          <h3 className="text-lg font-semibold mb-1">{t['accounts.emptyTitle']}</h3>
+          <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">{t['accounts.emptyHint']}</p>
+          <Button onClick={openCreate} size="sm" className="h-11 min-h-11"><Plus className="w-4 h-4 mr-1" />{t['accounts.create']}</Button>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -190,23 +199,23 @@ export function AccountsView() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${m2.color}15`, color: m2.color }}><Ic className="w-5 h-5" /></div>
-                    <div><div className="text-sm font-semibold">{a.name}</div><div className="text-xs text-muted-foreground">{locale === 'es' ? meta.labelEs : meta.label}{a.lastFour && ` · •••• ${a.lastFour}`}</div></div>
+                    <div><div className="text-sm font-semibold">{a.name}</div><div className="text-xs text-muted-foreground">{localizedPair(meta.labelEs, meta.label, locale)}{a.lastFour && ` · •••• ${a.lastFour}`}</div></div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => openEdit(a.id)} className="p-2 rounded-md hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Edit"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => openEdit(a.id)} className="p-2 rounded-md hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label={t['a11y.edit']}><Pencil className="w-4 h-4" /></button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <button className="p-2 rounded-md hover:bg-expense-soft text-muted-foreground hover:text-expense transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Delete"><Trash2 className="w-4 h-4" /></button>
+                        <button className="p-2 rounded-md hover:bg-expense-soft text-muted-foreground hover:text-expense transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label={t['a11y.delete']}><Trash2 className="w-4 h-4" /></button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>{locale === 'es' ? '¿Eliminar cuenta?' : 'Delete account?'}</AlertDialogTitle><AlertDialogDescription>{linkedTx > 0 ? (locale === 'es' ? `Esta cuenta tiene ${linkedTx} transacciones asociadas y no se puede eliminar (el historial se conserva). Para retirarla del patrimonio, edita su saldo a 0.` : `This account has ${linkedTx} linked transactions and cannot be deleted (history is preserved). To remove it from your net worth, edit its balance to 0.`) : (locale === 'es' ? `Se eliminará "${a.name}".` : `Delete "${a.name}"?`)}</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>{locale === 'es' ? 'Cancelar' : 'Cancel'}</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(a.id)} disabled={linkedTx > 0} className="bg-expense text-primary-foreground hover:bg-expense/90">{locale === 'es' ? 'Eliminar' : 'Delete'}</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogHeader><AlertDialogTitle>{t['accounts.deleteTitle']}</AlertDialogTitle><AlertDialogDescription>{linkedTx > 0 ? t['accounts.deleteWithTx'].replace('{n}', String(linkedTx)) : t['accounts.deleteConfirm'].replace('{name}', a.name)}</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogFooter><AlertDialogCancel>{t['common.cancel']}</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(a.id)} disabled={linkedTx > 0} className="bg-expense text-primary-foreground hover:bg-expense/90">{t['common.delete']}</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </div>
                 </div>
                 <div className="flex items-end justify-between">
-                  <div><div className="text-xs text-muted-foreground">{isLiability ? (locale === 'es' ? 'Deuda' : 'Debt') : t['dashboard.netWorth']}</div><div className={cn('text-lg sm:text-xl font-bold tabular-nums', isNeg && 'text-expense')} style={!isNeg ? { color: m2.color } : undefined}>{formatMoney(displayBalance, a.currency as CurrencyCode, locale)}</div></div>
+                  <div><div className="text-xs text-muted-foreground">{isLiability ? t['accounts.debt'] : t['dashboard.netWorth']}</div><div className={cn('text-lg sm:text-xl font-bold tabular-nums', isNeg && 'text-expense')} style={!isNeg ? { color: m2.color } : undefined}>{formatMoney(displayBalance, a.currency as CurrencyCode, locale)}</div></div>
                   <span className="text-xs text-muted-foreground">{a.currency}</span>
                 </div>
               </Card>

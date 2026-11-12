@@ -20,6 +20,13 @@ import {
   formatMoney,
   type CurrencyCode,
 } from '@/lib/finzen/currency';
+import {
+  downloadTextFile,
+  exportFilename,
+  exportTransactionsCsv,
+  exportTransactionsJson,
+} from '@/lib/finzen/export';
+import { intlLocale, localizedCategoryName } from '@/lib/finzen/localize';
 import { TransactionRow } from '@/components/finzen/transaction-row';
 
 type DateFilter = 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'last_year' | 'all' | 'specific_month';
@@ -102,7 +109,7 @@ export function TransactionsView() {
         ? t['transactions.today']
         : isYesterday
         ? t['transactions.yesterday']
-        : d.toLocaleDateString(locale === 'es' ? 'es-DO' : 'en-US', {
+        : d.toLocaleDateString(intlLocale(locale), {
             day: 'numeric',
             month: 'long',
             year: 'numeric',
@@ -129,22 +136,25 @@ export function TransactionsView() {
   }, [filtered, baseCurrency]);
 
   function exportFiltered(format: 'csv' | 'json') {
-    if (filtered.length === 0) { toast.error(locale === 'es' ? 'No hay transacciones para exportar' : 'No transactions to export'); return; }
-    let content: string; let mime: string; let ext: string;
-    if (format === 'json') {
-      content = JSON.stringify({ exportedAt: new Date().toISOString(), filterApplied: { dateFilter, categoryFilter, search }, transactions: filtered }, null, 2);
-      mime = 'application/json'; ext = 'json';
-    } else {
-      const h = ['Date','Type','Amount','Currency','Description','Category','Account'];
-      const rows = filtered.map((tx) => {
-        const cat = categories.find(c => c.id === tx.categoryId);
-        const acct = accounts.find(a => a.id === tx.fromAccountId) ?? accounts.find(a => a.id === tx.toAccountId);
-        return [new Date(tx.occurredOn).toISOString().split('T')[0], tx.type, String(tx.amount), tx.currency, `"${(tx.description||'').replace(/"/g,'""')}"`, `"${cat ? (locale==='es'?(cat.nameEs||cat.name):(cat.nameEn||cat.name)) : ''}"`, `"${acct?.name ?? ''}"`].join(',');
-      });
-      content = [h.join(','), ...rows].join('\n'); mime = 'text/csv'; ext = 'csv';
-    }
-    const blob = new Blob([content], { type: mime }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `finzen-filtered-${new Date().toISOString().split('T')[0]}.${ext}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    toast.success(locale === 'es' ? `${filtered.length} exportadas como ${format.toUpperCase()}` : `${filtered.length} exported as ${format.toUpperCase()}`);
+    if (filtered.length === 0) { toast.error(t['transactions.noTransactionsToExport']); return; }
+    const ctx = { categories, accounts, locale, baseCurrency: baseCurrency as CurrencyCode };
+    const content =
+      format === 'json'
+        ? exportTransactionsJson(filtered, ctx, {
+            exportedAt: new Date().toISOString(),
+            filterApplied: { dateFilter, categoryFilter, search },
+          })
+        : exportTransactionsCsv(filtered, ctx);
+    downloadTextFile(
+      exportFilename('finzen-filtered', format),
+      content,
+      format === 'json' ? 'application/json' : 'text/csv'
+    );
+    toast.success(
+      t['transactions.exportedCount']
+        .replace('{n}', String(filtered.length))
+        .replace('{format}', format.toUpperCase())
+    );
   }
 
   return (
@@ -153,11 +163,11 @@ export function TransactionsView() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl sm:text-2xl font-bold">{t['transactions.title']}</h1>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportFiltered('csv')}>
+          <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => exportFiltered('csv')}>
             <Download className="w-4 h-4 mr-1.5" />
             CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportFiltered('json')}>
+          <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => exportFiltered('json')}>
             <Download className="w-4 h-4 mr-1.5" />
             JSON
           </Button>
@@ -208,8 +218,8 @@ export function TransactionsView() {
               <SelectItem value="this_quarter">{t['transactions.thisQuarter']}</SelectItem>
               <SelectItem value="this_year">{t['transactions.thisYear']}</SelectItem>
               <SelectItem value="last_year">{t['transactions.lastYear']}</SelectItem>
-              <SelectItem value="all">{locale === 'es' ? 'Todos' : 'All'}</SelectItem>
-              <SelectItem value="specific_month">{locale === 'es' ? 'Mes específico...' : 'Specific month...'}</SelectItem>
+              <SelectItem value="all">{t['common.all']}</SelectItem>
+              <SelectItem value="specific_month">{t['transactions.specificMonth']}</SelectItem>
             </SelectContent>
           </Select>
           {dateFilter === 'specific_month' && (
@@ -229,7 +239,7 @@ export function TransactionsView() {
               <SelectItem value="all">{t['transactions.allCategories']}</SelectItem>
               {categories.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.icon} {locale === 'es' ? (c.nameEs || c.name) : (c.nameEn || c.name)}
+                  {c.icon} {localizedCategoryName(c, locale)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -262,7 +272,7 @@ export function TransactionsView() {
               <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
                 {t['transactions.emptyHint']}
               </p>
-              <Button size="sm" onClick={() => setAddSheetOpen(true)}>
+              <Button size="sm" className="h-11 min-h-11" onClick={() => setAddSheetOpen(true)}>
                 <Plus className="w-4 h-4 mr-1" />
                 {t['transactions.emptyCta']}
               </Button>

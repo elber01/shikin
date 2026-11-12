@@ -16,6 +16,7 @@ import { parseLocalDate, toLocalDateString, toStorageISOString, matchCategory } 
 import { parseCSVLine } from '@/lib/finzen/csv';
 import { parseOfxStatement } from '@/lib/finzen/ofx';
 import { BANK_PRESETS, autoMapColumns, parseBankAmount, type BankPreset } from '@/lib/finzen/bank-presets';
+import { localizedPair } from '@/lib/finzen/localize';
 
 interface ParsedBankTx {
   date: string;
@@ -45,12 +46,12 @@ export function BankImportFlow() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const MAP_FIELDS = [
-    { key: 'date', label: locale === 'es' ? 'Fecha' : 'Date', required: true },
-    { key: 'amount', label: locale === 'es' ? 'Monto' : 'Amount', required: false },
-    { key: 'debit', label: locale === 'es' ? 'Débito' : 'Debit', required: false },
-    { key: 'credit', label: locale === 'es' ? 'Crédito' : 'Credit', required: false },
-    { key: 'description', label: locale === 'es' ? 'Descripción' : 'Description', required: false },
-    { key: 'type', label: locale === 'es' ? 'Tipo' : 'Type', required: false },
+    { key: 'date', label: t['common.date'], required: true },
+    { key: 'amount', label: t['common.amount'], required: false },
+    { key: 'debit', label: t['bank.debit'], required: false },
+    { key: 'credit', label: t['bank.credit'], required: false },
+    { key: 'description', label: t['common.description'], required: false },
+    { key: 'type', label: t['common.type'], required: false },
   ];
 
   function reset() {
@@ -65,7 +66,7 @@ export function BankImportFlow() {
   }
 
   function openWizard() {
-    if (accounts.length === 0) { toast.error(locale === 'es' ? 'Crea una cuenta' : 'Create account first'); return; }
+    if (accounts.length === 0) { toast.error(t['bank.createAccountFirst']); return; }
     reset(); setTargetAccountId(accounts[0].id); setOpen(true);
   }
 
@@ -75,7 +76,7 @@ export function BankImportFlow() {
     reader.onload = (ev) => {
       try {
         const text = String(ev.target?.result ?? '');
-        const noTx = () => toast.error(locale === 'es' ? 'Sin transacciones' : 'No transactions found');
+        const noTx = () => toast.error(t['bank.noTransactions']);
         if (/\.(ofx|qfx)$/i.test(file.name) || /OFXHEADER|<OFX|STMTTRN/i.test(text)) {
           const stmt = parseOfxStatement(text);
           if (stmt.transactions.length === 0) { noTx(); return; }
@@ -89,7 +90,7 @@ export function BankImportFlow() {
           setIsOfx(true); setOfxCurrency(stmt.currency); setStep('preview');
           return;
         }
-        if (!preset) { toast.error(locale === 'es' ? 'Selecciona un banco' : 'Select a bank'); return; }
+        if (!preset) { toast.error(t['bank.selectBank']); return; }
         const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
         if (lines.length < 2) { noTx(); return; }
         let headerIdx = 0;
@@ -111,7 +112,7 @@ export function BankImportFlow() {
         setHeaders(fileHeaders); setRows(dataRows);
         setMapping(autoMapColumns(fileHeaders, preset));
         setIsOfx(false); setOfxCurrency(null); setStep('mapping');
-      } catch { toast.error(locale === 'es' ? 'Error al procesar el archivo' : 'Error processing file'); }
+      } catch { toast.error(t['bank.processError']); }
     };
     reader.readAsText(file);
   }
@@ -141,10 +142,10 @@ export function BankImportFlow() {
         if (tv.includes('ingreso') || tv.includes('income') || tv.includes('abono') || tv.includes('credit')) type = 'income';
         else if (tv.includes('gasto') || tv.includes('expense') || tv.includes('retiro') || tv.includes('debito') || tv.includes('cargo')) type = 'expense';
       }
-      const description = (mapping.description ? (row[mapping.description] || '') : '').trim() || 'Estado de cuenta';
+      const description = (mapping.description ? (row[mapping.description] || '') : '').trim() || t['bank.defaultDescription'];
       result.push({ date: toLocalDateString(d), amount, type, description, fitid: null });
     }
-    if (result.length === 0) { toast.error(locale === 'es' ? 'Sin transacciones válidas' : 'No valid transactions'); return; }
+    if (result.length === 0) { toast.error(t['bank.noValidTransactions']); return; }
     setParsed(result); setStep('preview');
   }
 
@@ -170,7 +171,7 @@ export function BankImportFlow() {
   const targetCurrency = (accounts.find(a => a.id === targetAccountId)?.currency ?? baseCurrency) as CurrencyCode;
 
   async function handleCommit() {
-    if (!targetAccountId) { toast.error(locale === 'es' ? 'Selecciona cuenta' : 'Select account'); return; }
+    if (!targetAccountId) { toast.error(t['common.selectAccount']); return; }
     const currency = (accounts.find(a => a.id === targetAccountId)?.currency ?? baseCurrency) as CurrencyCode;
     let imported = 0, duplicates = 0;
     let skipped = isOfx ? 0 : Math.max(0, rows.length - parsed.length);
@@ -213,11 +214,17 @@ export function BankImportFlow() {
 
   return (
     <>
-      <Card className="p-5 cursor-pointer hover:border-primary/40 transition-colors" onClick={openWizard}>
-        <div className="w-12 h-12 rounded-xl bg-income/10 flex items-center justify-center mb-3"><Building2 className="w-6 h-6 text-income" /></div>
-        <div className="text-base font-semibold">{t['import.bank']}</div>
-        <div className="text-xs text-muted-foreground mt-1">{t['import.bankDesc']}</div>
-        <div className="flex gap-1.5 mt-3"><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">CSV</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">OFX</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">QFX</span></div>
+      <Card className="p-0 overflow-hidden hover:border-primary/40 transition-colors">
+        <button
+          type="button"
+          onClick={openWizard}
+          className="w-full h-full p-5 text-left cursor-pointer hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <div className="w-12 h-12 rounded-xl bg-income/10 flex items-center justify-center mb-3"><Building2 className="w-6 h-6 text-income" /></div>
+          <div className="text-base font-semibold">{t['import.bank']}</div>
+          <div className="text-xs text-muted-foreground mt-1">{t['import.bankDesc']}</div>
+          <div className="flex gap-1.5 mt-3"><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">CSV</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">OFX</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">QFX</span></div>
+        </button>
       </Card>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto scroll-area">
@@ -226,28 +233,37 @@ export function BankImportFlow() {
           {step === 'bank' && (
             <div className="space-y-2 mt-2">
               {BANK_PRESETS.map(b => (
-                <div key={b.key} className="p-4 border border-border rounded-lg hover:bg-surface-2 cursor-pointer" onClick={() => { setPreset(b); setStep('upload'); }}>
+                <button
+                  key={b.key}
+                  type="button"
+                  className="w-full p-4 border border-border rounded-lg hover:bg-surface-2 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={() => { setPreset(b); setStep('upload'); }}
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold">{b.key === 'generic' ? t['import.bankOther'] : (locale === 'es' ? b.name : b.nameEn)}</div>
+                    <div className="text-sm font-semibold">{b.key === 'generic' ? t['import.bankOther'] : localizedPair(b.name, b.nameEn, locale)}</div>
                     <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface shrink-0">{b.key === 'generic' ? 'CSV · OFX' : 'CSV'}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{locale === 'es' ? b.hint : b.hintEn}</div>
-                </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{localizedPair(b.hint, b.hintEn, locale)}</div>
+                </button>
               ))}
             </div>
           )}
           {step === 'upload' && preset && (
             <div className="space-y-4 mt-2">
-              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-surface-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
                 <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">{locale === 'es' ? preset.name : preset.nameEn}</p>
+                <p className="text-sm font-medium">{localizedPair(preset.name, preset.nameEn, locale)}</p>
                 <p className="text-xs text-muted-foreground mt-1">{t['import.bankUploadHint']}</p>
-              </div>
+              </button>
             </div>
           )}
           {step === 'mapping' && (
             <div className="space-y-4 mt-2">
-              <div className="text-sm text-muted-foreground">{locale === 'es' ? `${rows.length} filas` : `${rows.length} rows`}</div>
+              <div className="text-sm text-muted-foreground">{t['bank.rows'].replace('{n}', String(rows.length))}</div>
               <div className="space-y-3">
                 {MAP_FIELDS.map(f => (
                   <div key={f.key} className="grid grid-cols-2 gap-3 items-center">
@@ -259,7 +275,7 @@ export function BankImportFlow() {
                   </div>
                 ))}
               </div>
-              <Button className="w-full h-11" disabled={!mapping.date || (!mapping.amount && !(mapping.debit && mapping.credit))} onClick={handleContinueToPreview}>{locale === 'es' ? 'Continuar' : 'Continue'}</Button>
+              <Button className="w-full h-11" disabled={!mapping.date || (!mapping.amount && !(mapping.debit && mapping.credit))} onClick={handleContinueToPreview}>{t['bank.continue']}</Button>
             </div>
           )}
           {step === 'preview' && previewData && (
@@ -267,12 +283,12 @@ export function BankImportFlow() {
               <div className="flex flex-wrap gap-1.5">
                 <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{parsed.length} {t['import.bankDetected']}</span>
                 <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{t['import.bankRange']}: {formatDate(parseLocalDate(previewData.min), locale)} → {formatDate(parseLocalDate(previewData.max), locale)}</span>
-                <span className="text-xs px-2 py-1 rounded-md bg-income-soft text-income">{previewData.income} {locale === 'es' ? 'ingresos' : 'income'}</span>
-                <span className="text-xs px-2 py-1 rounded-md bg-expense-soft text-expense">{previewData.expense} {locale === 'es' ? 'gastos' : 'expenses'}</span>
+                <span className="text-xs px-2 py-1 rounded-md bg-income-soft text-income">{previewData.income} {t['bank.income']}</span>
+                <span className="text-xs px-2 py-1 rounded-md bg-expense-soft text-expense">{previewData.expense} {t['bank.expenses']}</span>
                 {isOfx && <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{t['import.bankOfxAuto']}</span>}
                 {isOfx && ofxCurrency && ofxCurrency !== targetCurrency && (
                   <span className="text-xs px-2 py-1 rounded-md bg-warning-soft text-warning">
-                    {locale === 'es' ? `El estado de cuenta está en ${ofxCurrency} y la cuenta destino en ${targetCurrency} — verifica antes de importar` : `Statement is in ${ofxCurrency} but target account is in ${targetCurrency} — double-check before importing`}
+                    {t['bank.currencyMismatch'].replace('{from}', ofxCurrency).replace('{to}', targetCurrency)}
                   </span>
                 )}
                 {previewData.duplicates > 0 && <span className="text-xs px-2 py-1 rounded-md bg-warning-soft text-warning">{previewData.duplicates} {t['import.bankDuplicates']}</span>}
@@ -280,9 +296,9 @@ export function BankImportFlow() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">{locale === 'es' ? 'Fecha' : 'Date'}</TableHead>
-                    <TableHead className="text-xs">{locale === 'es' ? 'Descripción' : 'Description'}</TableHead>
-                    <TableHead className="text-xs text-right">{locale === 'es' ? 'Monto' : 'Amount'}</TableHead>
+                    <TableHead className="text-xs">{t['common.date']}</TableHead>
+                    <TableHead className="text-xs">{t['common.description']}</TableHead>
+                    <TableHead className="text-xs text-right">{t['common.amount']}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -294,7 +310,7 @@ export function BankImportFlow() {
                     </TableRow>
                   ))}
                   {parsed.length > 8 && (
-                    <TableRow><TableCell colSpan={3} className="text-xs text-muted-foreground text-center">+{parsed.length - 8} {locale === 'es' ? 'más' : 'more'}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={3} className="text-xs text-muted-foreground text-center">+{parsed.length - 8} {t['common.more']}</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -311,13 +327,13 @@ export function BankImportFlow() {
           {step === 'done' && (
             <div className="space-y-4 mt-2 text-center py-4">
               <div className="w-16 h-16 rounded-full bg-income/10 flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-income" /></div>
-              <h3 className="text-lg font-semibold">{locale === 'es' ? '¡Importación completada!' : 'Import completed!'}</h3>
+              <h3 className="text-lg font-semibold">{t['common.importCompleted']}</h3>
               <div className="bg-surface-2 rounded-lg p-4 text-sm space-y-1 max-w-sm mx-auto text-left">
                 <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankImported']}:</span><span className="font-semibold text-income">{counts.imported}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankDuplicates']}:</span><span>{counts.duplicates}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankInvalid']}:</span><span>{counts.skipped}</span></div>
               </div>
-              <Button className="h-11" onClick={() => handleOpenChange(false)}>{locale === 'es' ? 'Cerrar' : 'Close'}</Button>
+              <Button className="h-11" onClick={() => handleOpenChange(false)}>{t['common.close']}</Button>
             </div>
           )}
         </DialogContent>

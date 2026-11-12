@@ -113,6 +113,35 @@
 - **Estado MCP:** 🔧 extraer.
 - **Verificación:** `scripts/e2e-accounts-v1.js` (caso 409 incluido).
 
+### Partidas de presupuesto (10-U0)
+
+Rutas **internas** (sesión NextAuth), no v1 pública — el agente las consumirá
+cuando se expongan como tools.
+
+`add_budget_item`
+- **Descripción:** Añade una partida (categoría + monto planificado + umbral de alerta) a un presupuesto **existente**.
+- **Ubicación Backend:** `POST /api/budgets/[budgetId]/items` + `addBudgetItemForUser()` en `src/lib/services/budgets-service.ts`.
+- **Entrada:** `{ categoryId: string, plannedAmount: number, alertThresholdPct?: number (def 80, clamp 1..100) }`
+- **Salida:** `201 { id, budgetId, categoryId, plannedAmount, alertThresholdPct, category: {…} }`
+- **Errores:** `401 unauthorized` (sin sesión) · `404 not_found` (presupuesto inexistente o de otro usuario) · `422 invalid_category` (categoría inexistente o de otro usuario) · `422 invalid_amount` (no finito o < 0).
+- **Notas:** el presupuesto debe pertenecer al usuario y la categoría debe ser suya o de sistema (`isSystem`) → **no hay escritura cruzada entre usuarios**. Esta skill nació del bug cerrado en 10-U0: el store faktaba la partida con un id `temp_…` y nunca persistía, así que se perdía al recargar.
+- **Estado MCP:** 🔧 extraer (servicio ya separado; falta exponerla como tool).
+- **Verificación:** manual en la UI (Presupuestos → añadir partida a un presupuesto existente → recargar → persiste) + harness.
+
+`update_budget_item`
+- **Ubicación Backend:** `PATCH /api/budgets/[budgetId]/items/[itemId]`.
+- **Entrada:** `{ plannedAmount?: number, alertThresholdPct?: number (1..100) }` — ausente = no tocar.
+- **Salida:** `200 { …partida… }` · `404 not_found` · `401 unauthorized`.
+- **Estado MCP:** 🔧 extraer.
+- **Verificación:** manual en la UI + harness.
+
+`delete_budget_item`
+- **Ubicación Backend:** `DELETE /api/budgets/[budgetId]/items/[itemId]`.
+- **Salida:** `200 { success: true }` · `404 not_found` · `401 unauthorized`.
+- **Notas:** la partida se borra; las transacciones de la categoría **no** se tocan (la categoría es un eje de clasificación, no un asiento).
+- **Estado MCP:** 🔧 extraer.
+- **Verificación:** manual en la UI + harness.
+
 ## 3. Resolución y Helpers
 
 ### `resolve_category`

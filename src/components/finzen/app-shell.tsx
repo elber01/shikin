@@ -15,6 +15,7 @@ import { SettingsView } from './settings-view';
 import { ViewTransition } from './view-transition';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { translations } from '@/lib/finzen/i18n';
 
 const VIEWS = {
   dashboard: DashboardView,
@@ -27,7 +28,8 @@ const VIEWS = {
 } as const;
 
 export function AppShell() {
-  const { activeView, sidebarCollapsed, loadData, loading, transactions, accounts } = useFinZenStore();
+  const { activeView, sidebarCollapsed, loadData, loading, transactions, accounts, locale } = useFinZenStore();
+  const t = translations[locale];
 
   // Load data from API on mount
   useEffect(() => {
@@ -37,7 +39,7 @@ export function AppShell() {
   // Show loading state on first load
   if (loading && transactions.length === 0 && accounts.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center" role="status" aria-label="Cargando">
+      <div className="min-h-screen flex items-center justify-center" role="status" aria-label={t['a11y.loadingPanel']}>
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -51,7 +53,7 @@ export function AppShell() {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-medium focus:shadow-lg"
       >
-        Saltar al contenido principal
+        {t['a11y.skipToContent']}
       </a>
 
       <Sidebar />

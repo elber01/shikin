@@ -48,6 +48,13 @@ import { toast } from 'sonner';
 import { useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { CURRENCIES, type CurrencyCode, type Locale } from '@/lib/finzen/currency';
+import {
+  downloadTextFile,
+  exportFilename,
+  exportTransactionsCsv,
+  exportTransactionsJson,
+} from '@/lib/finzen/export';
+import { localeFlag, localizedPair } from '@/lib/finzen/localize';
 import { cn } from '@/lib/utils';
 import { CategoriesManager } from '@/components/finzen/categories-manager';
 import { ApiKeyManager } from '@/components/finzen/api-key-manager';
@@ -67,34 +74,23 @@ export function SettingsView() {
   // Misma lógica probada del Import Center (export completo, sin filtros).
   function exportData(format: 'csv' | 'json') {
     if (transactions.length === 0 && accounts.length === 0) {
-      toast.error(locale === 'es' ? 'No hay datos' : 'No data');
+      toast.error(t['common.noData']);
       return;
     }
-    let content: string; let mime: string; let ext: string;
-    if (format === 'json') {
-      content = JSON.stringify({ exportedAt: new Date().toISOString(), accounts, transactions }, null, 2);
-      mime = 'application/json'; ext = 'json';
-    } else {
-      const h = ['Date', 'Type', 'Amount', 'Currency', 'Description', 'Category', 'Account'];
-      const rows = transactions.map((tx) => {
-        const cat = categories.find((c) => c.id === tx.categoryId);
-        const acct = accounts.find((a) => a.id === tx.fromAccountId) ?? accounts.find((a) => a.id === tx.toAccountId);
-        return [new Date(tx.occurredOn).toISOString().split('T')[0], tx.type, String(tx.amount), tx.currency,
-          `"${(tx.description || '').replace(/"/g, '""')}"`,
-          `"${cat ? (locale === 'es' ? (cat.nameEs || cat.name) : (cat.nameEn || cat.name)) : ''}"`,
-          `"${acct?.name ?? ''}"`].join(',');
-      });
-      content = [h.join(','), ...rows].join('\n');
-      mime = 'text/csv'; ext = 'csv';
-    }
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `finzen-export-${new Date().toISOString().split('T')[0]}.${ext}`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success(locale === 'es' ? `Exportado ${format.toUpperCase()}` : `Exported ${format.toUpperCase()}`);
+    const ctx = { categories, accounts, locale, baseCurrency: baseCurrency as CurrencyCode };
+    const content =
+      format === 'json'
+        ? exportTransactionsJson(transactions, ctx, {
+            exportedAt: new Date().toISOString(),
+            accounts,
+          })
+        : exportTransactionsCsv(transactions, ctx);
+    downloadTextFile(
+      exportFilename('finzen-export', format),
+      content,
+      format === 'json' ? 'application/json' : 'text/csv'
+    );
+    toast.success(t['common.exported'].replace('{format}', format.toUpperCase()));
   }
 
   // [UX fix, auditoría P2-2] Eliminar cuenta: era un botón muerto sin confirmación.
@@ -105,10 +101,10 @@ export function SettingsView() {
       const res = await fetch('/api/me', { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       resetStore();
-      toast.success(locale === 'es' ? 'Cuenta eliminada. Adiós 👋' : 'Account deleted. Bye 👋');
+      toast.success(t['settings.accountDeleted']);
       signOut({ callbackUrl: '/login' });
     } catch (err) {
-      toast.error(locale === 'es' ? 'No se pudo eliminar la cuenta' : 'Failed to delete account', {
+      toast.error(t['settings.deleteAccountFailed'], {
         description: String(err),
       });
       setDeleting(false);
@@ -127,7 +123,7 @@ export function SettingsView() {
   function ComingSoon() {
     return (
       <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-surface-2 text-muted-foreground shrink-0">
-        {locale === 'es' ? 'Próximamente' : 'Soon'}
+        {t['common.soon']}
       </span>
     );
   }
@@ -136,24 +132,27 @@ export function SettingsView() {
     {
       icon: User,
       label: t['settings.profile'],
-      subtitle: session?.user?.name || (locale === 'es' ? 'Mi perfil' : 'My profile'),
+      subtitle: session?.user?.name || t['settings.myProfile'],
       content: (
         <div className="divide-y divide-border">
-          <InfoRow label={locale === 'es' ? 'Nombre' : 'Name'} value={session?.user?.name || '—'} />
-          <InfoRow label="Email" value={session?.user?.email || '—'} />
-          <InfoRow label={locale === 'es' ? 'Idioma' : 'Language'} value={locale === 'es' ? '🇪🇸 Español' : '🇬🇧 English'} />
-          <InfoRow label={locale === 'es' ? 'Moneda base' : 'Base currency'} value={`${CURRENCIES[baseCurrency as CurrencyCode].symbol} ${baseCurrency}`} />
+          <InfoRow label={t['settings.name']} value={session?.user?.name || '—'} />
+          <InfoRow label={t['settings.email']} value={session?.user?.email || '—'} />
+          <InfoRow
+            label={t['settings.language']}
+            value={`${localeFlag(locale)} ${localizedPair(t['common.spanish'], t['common.english'], locale)}`}
+          />
+          <InfoRow label={t['settings.baseCurrency']} value={`${CURRENCIES[baseCurrency as CurrencyCode].symbol} ${baseCurrency}`} />
         </div>
       ),
     },
     {
       icon: Users,
       label: t['settings.household'],
-      subtitle: locale === 'es' ? `Mi Hogar · ${1} ${1 === 1 ? 'miembro' : 'miembros'}` : `My Household · 1 member`,
+      subtitle: t['settings.householdSubtitle'],
       content: (
         <div className="text-sm text-muted-foreground space-y-2">
-          <InfoRow label={locale === 'es' ? 'Miembros' : 'Members'} value={session?.user?.name || '—'} />
-          <p>{locale === 'es' ? 'La gestión multi-miembro (invitar a tu familia, asignar transacciones) está en desarrollo.' : 'Multi-member management (invite your family, assign transactions) is in development.'}</p>
+          <InfoRow label={t['settings.members']} value={session?.user?.name || '—'} />
+          <p>{t['settings.householdDev']}</p>
           <ComingSoon />
         </div>
       ),
@@ -161,32 +160,32 @@ export function SettingsView() {
     {
       icon: Tags,
       label: t['settings.categories'],
-      subtitle: `${categories.length} ${locale === 'es' ? 'categorías' : 'categories'}`,
+      subtitle: t['settings.categoriesSubtitle'].replace('{n}', String(categories.length)),
       content: (
         <div className="text-sm text-muted-foreground space-y-2">
-          <p>{locale === 'es' ? 'Gestiona, edita y crea categorías en la sección de esta misma página.' : 'Manage, edit and create categories in the section below on this page.'}</p>
+          <p>{t['settings.categoriesHint']}</p>
         </div>
       ),
     },
     {
       icon: ShieldCheck,
       label: t['settings.security'],
-      subtitle: '2FA · WebAuthn',
+      subtitle: t['settings.twoFactorSubtitle'],
       content: (
         <div className="divide-y divide-border">
-          <InfoRow label={locale === 'es' ? 'Contraseñas' : 'Passwords'} value={locale === 'es' ? 'bcrypt (12 rounds)' : 'bcrypt (12 rounds)'} />
-          <InfoRow label={locale === 'es' ? 'Sesiones' : 'Sessions'} value={locale === 'es' ? 'JWT en cookies httpOnly' : 'JWT in httpOnly cookies'} />
-          <div className="pt-2"><ComingSoon /><span className="text-xs text-muted-foreground ml-1.5">{locale === 'es' ? '2FA y passkeys en desarrollo' : '2FA & passkeys in development'}</span></div>
+          <InfoRow label={t['settings.passwords']} value={t['settings.passwordAlgoValue']} />
+          <InfoRow label={t['settings.sessions']} value={t['settings.sessionsValue']} />
+          <div className="pt-2"><ComingSoon /><span className="text-xs text-muted-foreground ml-1.5">{t['settings.twoFactorDev']}</span></div>
         </div>
       ),
     },
     {
       icon: Building2,
       label: t['settings.bankConnections'],
-      subtitle: locale === 'es' ? 'Sin conexiones activas' : 'No active connections',
+      subtitle: t['settings.noConnections'],
       content: (
         <div className="text-sm text-muted-foreground space-y-2">
-          <p>{locale === 'es' ? 'Importación automática desde tu banco vía Plaid.' : 'Automatic bank import via Plaid.'}</p>
+          <p>{t['settings.plaidHint']}</p>
           <ComingSoon />
         </div>
       ),
@@ -271,7 +270,7 @@ export function SettingsView() {
                     : 'border-border hover:bg-surface-2'
                 )}
               >
-                {l === 'es' ? '🇪🇸 Español' : '🇬🇧 English'}
+                {localeFlag(l)} {localizedPair(t['common.spanish'], t['common.english'], l)}
               </button>
             ))}
           </div>
@@ -326,15 +325,13 @@ export function SettingsView() {
             </AccordionTrigger>
             <AccordionContent className="pb-4 pt-1">
               <p className="text-xs text-muted-foreground mb-3">
-                {locale === 'es'
-                  ? 'Descarga todas tus cuentas y transacciones (sin filtros).'
-                  : 'Download all your accounts and transactions (no filters).'}
+                {t['settings.exportHint']}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => exportData('csv')}>
+                <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => exportData('csv')}>
                   <FileText className="w-4 h-4 mr-1.5" />CSV
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => exportData('json')}>
+                <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => exportData('json')}>
                   <Database className="w-4 h-4 mr-1.5" />JSON
                 </Button>
               </div>
@@ -353,7 +350,7 @@ export function SettingsView() {
               <div className="flex-1">
                 <div className="text-sm font-medium text-expense">{t['settings.deleteAccount']}</div>
                 <div className="text-xs text-muted-foreground">
-                  {locale === 'es' ? 'Elimina permanentemente todos tus datos' : 'Permanently delete all your data'}
+                  {t['settings.deleteAccountHint']}
                 </div>
               </div>
             </button>
@@ -361,26 +358,22 @@ export function SettingsView() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {locale === 'es' ? '¿Eliminar tu cuenta para siempre?' : 'Delete your account forever?'}
+                {t['settings.deleteAccountTitle']}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                {locale === 'es'
-                  ? 'Se eliminarán TODAS tus cuentas, transacciones, presupuestos, categorías y claves API. Esta acción NO se puede deshacer. Exporta tus datos primero si quieres conservarlos.'
-                  : 'ALL your accounts, transactions, budgets, categories and API keys will be deleted. This action CANNOT be undone. Export your data first if you want to keep it.'}
+                {t['settings.deleteAccountBody']}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={deleting}>
-                {locale === 'es' ? 'Cancelar' : 'Cancel'}
+                {t['common.cancel']}
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={(e) => { e.preventDefault(); handleDeleteAccount(); }}
-                className="bg-expense text-white hover:bg-expense/90"
+                className="bg-expense text-primary-foreground hover:bg-expense/90"
                 disabled={deleting}
               >
-                {deleting
-                  ? (locale === 'es' ? 'Eliminando…' : 'Deleting…')
-                  : (locale === 'es' ? 'Sí, eliminar todo' : 'Yes, delete everything')}
+                {deleting ? t['settings.deleting'] : t['settings.deleteEverything']}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -397,8 +390,8 @@ export function SettingsView() {
             <LogOut className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="flex-1">
-            <div className="text-sm font-medium">{locale === 'es' ? 'Cerrar sesión' : 'Sign out'}</div>
-            <div className="text-xs text-muted-foreground">{locale === 'es' ? 'Salir de tu cuenta' : 'Sign out of your account'}</div>
+            <div className="text-sm font-medium">{t['settings.signOut']}</div>
+            <div className="text-xs text-muted-foreground">{t['settings.signOutHint']}</div>
           </div>
         </button>
       </Card>

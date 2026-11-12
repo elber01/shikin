@@ -115,6 +115,26 @@ El ESLint usa React Compiler. Los `useMemo` cuyas dependencias derivan de
 }, [transactions, viewYear, viewMonth, baseCurrency]);
 ```
 
+### Dominio, i18n y export (convención 10-U0)
+- **Nombre localizado de categoría:** usar SIEMPRE
+  `localizedCategoryName(cat, locale)` de `src/lib/finzen/localize.ts`.
+  Prohibido reintroducir el ternario `cat.nameEs || cat.name` (estaba
+  duplicado en 11 vistas).
+- **Export de transacciones:** usar SIEMPRE `src/lib/finzen/export.ts`
+  (`exportTransactionsCsv` / `exportTransactionsJson` / `downloadTextFile`).
+  No reimplementar el escape RFC 4180 ni el header
+  `Date,Type,Amount,Currency,Description,Category,Account`. El JSON de
+  respaldo debe conservar `id`, `tags` e `importSource` verbatim (los usa
+  `POST /api/restore`, que preserva IDs).
+- **Errores del servidor:** `apiFetch` (`src/store/finzen-store.ts`) lanza una
+  `ApiError` con `code` (y `transactionCount` cuando aplica). Los handlers
+  muestran la **causa real traducida** con la clave i18n del código — nunca
+  el mensaje crudo del servidor ni un "Error al eliminar" genérico.
+- **Totales por periodo:** una sola fuente de verdad —
+  `computeMonthlyFlows()` en `src/lib/finzen/finance.ts`. Si el gráfico y las
+  tarjetas de totales usan periodos distintos, el usuario ve cifras que no
+  cuadran (pasó en Reportes hasta 10-U0).
+
 ### Seguridad
 - **Nunca** secrets en código ni commits. `NEXTAUTH_SECRET` es fail-fast en
   producción (excepción controlada solo durante `phase-production-build`).

@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { formatMoney, formatRelativeDate, type CurrencyCode } from '@/lib/finzen/currency';
+import { localizedCategoryName } from '@/lib/finzen/localize';
 import type { Transaction } from '@/store/finzen-store';
 
 interface TransactionRowProps {
@@ -33,17 +34,13 @@ export function TransactionRow({ tx, onEdit }: TransactionRowProps) {
     if (onEdit) onEdit(tx.id);
   }
 
-  return (
-    <div
-      onClick={handleClick}
-      className={cn(
-        'flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-2 transition-colors',
-        onEdit && 'cursor-pointer active:bg-surface-2'
-      )}
-      role={onEdit ? 'button' : undefined}
-      tabIndex={onEdit ? 0 : undefined}
-      onKeyDown={onEdit ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
-    >
+  const rowClass = cn(
+    'flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-2 transition-colors',
+    onEdit && 'w-full text-left cursor-pointer active:bg-surface-2'
+  );
+
+  const rowContent = (
+    <>
       {/* Icon */}
       <div
         className="w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0"
@@ -61,7 +58,7 @@ export function TransactionRow({ tx, onEdit }: TransactionRowProps) {
         {/* [responsive] flex-wrap: con nombres de cuenta largos ("Cuenta corriente")
             el meta fluye a una segunda línea legible en vez de aplastarse a 5px. */}
         <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <span className="shrink-0">{category ? (locale === 'es' ? (category.nameEs || category.name) : (category.nameEn || category.name)) : t[`transactions.${tx.type}`]}</span>
+          <span className="shrink-0">{category ? localizedCategoryName(category, locale) : t[`transactions.${tx.type}`]}</span>
           <span aria-hidden>·</span>
           <span className="shrink-0">{formatRelativeDate(tx.occurredOn, locale)}</span>
           {relevantAccount && (
@@ -83,6 +80,18 @@ export function TransactionRow({ tx, onEdit }: TransactionRowProps) {
         {sign}
         {formatMoney(displayAmount, displayCur, locale)}
       </div>
-    </div>
+    </>
+  );
+
+  // Botón nativo cuando la fila es editable: el `role="button"` sobre un div
+  // no herdaba el comportamiento de teclado ni el foco del navegador.
+  if (!onEdit) {
+    return <div className={rowClass}>{rowContent}</div>;
+  }
+
+  return (
+    <button type="button" onClick={handleClick} className={rowClass}>
+      {rowContent}
+    </button>
   );
 }

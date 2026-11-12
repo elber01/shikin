@@ -38,7 +38,7 @@ export function KpiCard({
   const isGradient = variant === 'gradient';
   const colorVar =
     isGradient
-      ? 'rgba(255, 255, 255, 0.95)'
+      ? 'var(--primary-foreground)'
       : color === 'income'
       ? 'var(--income)'
       : color === 'expense'
@@ -61,7 +61,7 @@ export function KpiCard({
       {isGradient && (
         <div
           aria-hidden
-          className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/10 blur-2xl pointer-events-none"
+          className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-primary-foreground/10 blur-2xl pointer-events-none"
         />
       )}
       <div className="flex flex-col h-full">
@@ -69,7 +69,7 @@ export function KpiCard({
           <span
             className={cn(
               'text-xs font-medium uppercase tracking-wide',
-              isGradient ? 'text-white/70' : 'text-muted-foreground'
+              isGradient ? 'text-primary-foreground/70' : 'text-muted-foreground'
             )}
           >
             {label}
@@ -79,7 +79,7 @@ export function KpiCard({
               className={cn(
                 'text-xs font-semibold flex items-center gap-0.5 rounded-full px-1.5 py-0.5',
                 isGradient
-                  ? 'bg-white/15 text-white'
+                  ? 'bg-primary-foreground/15 text-primary-foreground'
                   : deltaTone === 'positive'
                   ? 'text-income bg-income-soft/60'
                   : deltaTone === 'negative'
@@ -107,7 +107,7 @@ export function KpiCard({
           {amount}
         </div>
         {suffix && (
-          <div className={cn('text-xs mt-1', isGradient ? 'text-white/70' : 'text-muted-foreground')}>
+          <div className={cn('text-xs mt-1', isGradient ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
             {suffix}
           </div>
         )}
