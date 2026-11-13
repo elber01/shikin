@@ -77,11 +77,11 @@
 
 ## 4. Estado actual (13-nov-2026)
 
-**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + build + copia portable a standalone. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd` (instalado con `npm install --no-save --no-package-lock bun`; `package.json` y lockfiles intactos salvo las purgas aprobadas). E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`).
+**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + build + copia portable a standalone. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd` (instalado con `npm install --no-save --no-package-lock bun`; `package.json` y lockfiles intactos salvo las purgas aprobadas). E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`).
 
 **⚠️ PENDIENTE DE DECISIÓN DEL DUEÑO — migración de colores en producción:** la app ya resuelve colores por token en runtime (tolera HEX heredado), pero la BD de Turso conserva los HEX antiguos. Para alinearla: `bun scripts/migrate-category-colors.ts --dry-run --allow-production` (ver) → `--apply --allow-production` (escribe, con backup) → `--rollback <backup>` (deshace). **El gate `--allow-production` es obligatorio para cualquier modo contra `libsql:`** (incluido dry-run). No ejecutar contra producción sin su visto bueno (riesgo de datos).
 
-**⚠️ SIN COMMIT (desde 12-nov-2026):** la fase 10-U1 está implementada, revisada y verificada en el working tree, **sin commit ni push** (10-U0 sí está commiteado y desplegado: `7a53c1f`).
+**✅ 10-U1 COMMITEADA Y PUSHEADA (13-nov-2026):** commit `821ee87` → `main` (`origin/main` verificado). Working tree limpio. 10-U0 = `7a53c1f` (commiteado, pusheado y desplegado).
 
 Sesión 13-nov-2026 (10-U1 — design system + tokens de categoría + i18n derivado + limpieza; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
 - **Alcance:** 4 bloques. B1 (color de categoría como token), B2 (design system propio en `src/components/finzen/ui/`), B3 (i18n con tipo derivado), B4 (limpieza de 34 ficheros + 35 deps). Cierra las deudas #13, #14 y #15.

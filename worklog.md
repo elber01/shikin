@@ -6326,6 +6326,7 @@ traducida **con el número de transacciones**.
 **Owner:** Edwin (aprobación: "adelante", 12-nov-2026)
 **Status:** ✅ Cerrado — revisor APRUEBA, 0 bloqueantes, `bun run verify` exit 0
 **Base:** `7a53c1f` (10-U0, ya commiteado y desplegado)
+**Commit:** `821ee87` — pusheado a `main` el 13-nov-2026 (working tree limpio)
 
 ### Objetivo
 
