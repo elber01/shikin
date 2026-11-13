@@ -15,17 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { CalendarIcon, Paperclip, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 // [UX fix] "September 27th, 2026" en UI española — date-fns sin locale
@@ -38,6 +27,8 @@ import { CURRENCIES, type CurrencyCode } from '@/lib/finzen/currency';
 import { toStorageISOString } from '@/lib/finzen/date-utils';
 import { localizedCategoryName } from '@/lib/finzen/localize';
 import type { TransactionType } from '@/store/finzen-store';
+import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
+import { CurrencySelect } from '@/components/finzen/ui/currency-select';
 
 type TxType = 'expense' | 'income' | 'transfer';
 
@@ -348,21 +339,7 @@ export function AddTransactionSheet() {
                   {CURRENCIES[currency].symbol}
                 </span>
               </div>
-              <Select value={currency} onValueChange={(v) => setCurrency(v as CurrencyCode)}>
-                <SelectTrigger className="w-24 h-14">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CURRENCIES).map(([code, meta]) => (
-                    <SelectItem key={code} value={code}>
-                      <span className="flex items-center gap-2">
-                        <span style={{ color: meta.color }}>{meta.symbol}</span>
-                        {code}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CurrencySelect value={currency} onChange={setCurrency} className="w-24 h-14" />
             </div>
           </div>
 
@@ -536,8 +513,8 @@ export function AddTransactionSheet() {
           {/* Actions */}
           <div className="flex gap-2 pt-2">
             {isEditMode && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+              <ConfirmDelete
+                trigger={
                   <Button
                     type="button"
                     variant="outline"
@@ -547,29 +524,15 @@ export function AddTransactionSheet() {
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t['tx.deleteTitle']}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t['tx.deleteBody']}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>
-                      {t['common.cancel']}
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      className="bg-expense text-primary-foreground hover:bg-expense/90"
-                    >
-                      {t['common.delete']}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                }
+                title={t['tx.deleteTitle']}
+                description={t['tx.deleteBody']}
+                confirmLabel={t['common.delete']}
+                cancelLabel={t['common.cancel']}
+                onConfirm={() => {
+                  void handleDelete();
+                }}
+              />
             )}
             <Button
               type="button"

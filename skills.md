@@ -150,8 +150,21 @@ cuando se expongan como tools.
 - **Entrada:** `{ userId: string, category?: string, direction: "expense"|"income" }`
 - **Salida:** `{ id: string | null, created: boolean, name: string | null }`
 - **Estrategia:** 1) match exacto `name` → 2) exacto `nameEs` → 3) contains case-insensitive (`LIKE` crudo, compatible SQLite) → 4) autocreación user-scoped con el `direction` dado. `category` vacía es válida (→ `id: null`).
+- **Color:** la autocreación deja `color = null` (el color no es parte del contrato v1) → la vista resuelve el token de fallback `cat-12`. Ver `normalize_category_color`.
 - **Estado MCP:** ✅ lista.
 - **Verificación:** cubierta por los E2E de `record_*` (autocreación con categoría nueva ✓).
+
+### `normalize_category_color`
+- **Descripción:** Convierte cualquier valor de color de categoría (HEX heredado, clave `cat-N`, vacío o inválido) a una **clave de token** válida `cat-1..cat-12`, con fallback determinista.
+- **Ubicación Backend:** `src/lib/finzen/category-color.ts` (`normalizeCategoryColor`, `isCategoryColorKey`, `categoryColorVar`, `categoryColorSoft`, `categoryColorCss`) + `src/lib/services/categories-service.ts` (`createCategoryForUser` / `updateCategoryForUser`, que normalizan al escribir).
+- **Entrada:** `{ color?: string | null }`
+- **Salida:** `{ key: "cat-1".."cat-12", css: "var(--cat-N)", soft: "color-mix(in oklab, var(--cat-N) 15%, transparent)" }`
+- **Estrategia:** clave `cat-N` válida → se respeta · HEX (`#RGB`/`#RRGGBB`) → **vecino más cercano en OKLab** (sRGB→lineal→OKLab, ΔE euclídeo; empate → índice menor) · vacío/ilegible → `cat-12` (fallback). El render **nunca** emite un HEX crudo: el CSS se resuelve siempre a `var(--cat-N)`.
+- **Errores:** ninguno — es una función pura y total (nunca crashea).
+- **Notas:** `POST /api/restore` preserva el `color` tal cual (fidelidad de respaldo) → acepta HEX y claves sin transformar; el runtime los normaliza al pintar.
+- **Estado MCP:** ✅ lista (función pura, sin dependencias de BD).
+- **Verificación:** test unitario del mapeo (vecino OKLab) + E2E: `POST /api/categories` con `color: "#059669"` persiste `cat-1`; con `color: "basura"` persiste `cat-12`.
+
 
 ### `resolve_account`
 - **Descripción:** Resuelve una cuenta por ID (cuid) o por nombre (exacto → case-insensitive → contains).

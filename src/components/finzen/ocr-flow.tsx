@@ -5,7 +5,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScanLine, Upload, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +14,10 @@ import { CURRENCIES, type CurrencyCode } from '@/lib/finzen/currency';
 import { scanReceipt, type ParsedReceipt } from '@/lib/finzen/ocr';
 import { localizedCategoryName } from '@/lib/finzen/localize';
 import type { TransactionType } from '@/store/finzen-store';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
+import { ProgressBar } from '@/components/finzen/ui/progress-bar';
+import { CurrencySelect } from '@/components/finzen/ui/currency-select';
+import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
 
 type Step = 'upload' | 'scanning' | 'review' | 'done';
 
@@ -91,51 +94,60 @@ export function OcrFlow({ onOpenChange }: { onOpenChange: (open: boolean) => voi
           <div className="flex gap-1.5 mt-3"><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">JPG</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">PNG</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">OCR</span></div>
         </button>
       </Card>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto scroll-area">
-          {/* File input INSIDE the Dialog */}
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
-          <DialogHeader><DialogTitle>{t['ocr.scanReceipt']}</DialogTitle></DialogHeader>
-          {step === 'upload' && (
-            <div className="space-y-4 mt-2">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-surface-2 transition-colors"
-              >
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" /><p className="text-sm font-medium">{t['ocr.uploadReceipt']}</p>
-              </button>
+      <CrudDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title={t['ocr.scanReceipt']}
+        maxWidth="md"
+        contentClassName="max-h-[90vh] overflow-y-auto scroll-area"
+      >
+        {/* File input INSIDE the Dialog */}
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+        {step === 'upload' && (
+          <div className="space-y-4 mt-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-surface-2 transition-colors"
+            >
+              <EmptyState
+                surface="plain"
+                icon={<Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />}
+                titleAs="p"
+                titleClassName="text-sm font-medium mb-0"
+                title={t['ocr.uploadReceipt']}
+              />
+            </button>
+          </div>
+        )}
+        {step === 'scanning' && (
+          <div className="space-y-4 mt-2 py-6 text-center">
+            <Loader2 className="w-12 h-12 mx-auto text-primary animate-spin" />
+            <h3 className="text-base font-semibold">{t['ocr.processing']}</h3>
+            <div className="w-full max-w-xs mx-auto"><ProgressBar value={Math.round(progress * 100)} tone="primary" size="sm" /><div className="text-xs text-muted-foreground mt-1.5">{Math.round(progress * 100)}%</div></div>
+            {imagePreview && <div className="max-w-[200px] mx-auto rounded-lg overflow-hidden border border-border"><img src={imagePreview} alt="Receipt" className="w-full h-auto" /></div>}
+          </div>
+        )}
+        {step === 'review' && (
+          <div className="space-y-4 mt-2">
+            {imagePreview && <div className="flex gap-3"><div className="w-20 h-20 rounded-lg overflow-hidden border border-border shrink-0"><img src={imagePreview} alt="Receipt" className="w-full h-full object-cover" /></div><div className="flex-1">{receipt && <span className="text-xs text-muted-foreground">{receipt.confidence.toFixed(0)}%</span>}</div></div>}
+            <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['ocr.merchant']}</Label><Input value={merchant} onChange={e => setMerchant(e.target.value)} className="h-11" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['tx.amount']}</Label><div className="relative"><Input type="text" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="0.00" className="h-11 font-mono text-right pr-10" /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{CURRENCIES[currency].symbol}</span></div></div>
+              <div className="space-y-2"><CurrencySelect value={currency} onChange={setCurrency} label={t['common.currency']} /></div>
             </div>
-          )}
-          {step === 'scanning' && (
-            <div className="space-y-4 mt-2 py-6 text-center">
-              <Loader2 className="w-12 h-12 mx-auto text-primary animate-spin" />
-              <h3 className="text-base font-semibold">{t['ocr.processing']}</h3>
-              <div className="w-full max-w-xs mx-auto"><div className="h-2 rounded-full bg-surface-2 overflow-hidden"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.round(progress * 100)}%` }} /></div><div className="text-xs text-muted-foreground mt-1.5">{Math.round(progress * 100)}%</div></div>
-              {imagePreview && <div className="max-w-[200px] mx-auto rounded-lg overflow-hidden border border-border"><img src={imagePreview} alt="Receipt" className="w-full h-auto" /></div>}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['common.category']}</Label><Select value={categoryId} onValueChange={setCategoryId}><SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger><SelectContent>{expenseCategories.map(c => <SelectItem key={c.id} value={c.id}><span className="flex items-center gap-2"><span>{c.icon}</span>{localizedCategoryName(c, locale)}</span></SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['common.account']}</Label>{accounts.length > 0 ? <Select value={accountId} onValueChange={setAccountId}><SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger><SelectContent>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select> : <div className="h-11 rounded-md border-2 border-dashed border-warning/40 flex items-center justify-center"><span className="text-xs text-warning">{t['ocr.createAccountWarning']}</span></div>}</div>
             </div>
-          )}
-          {step === 'review' && (
-            <div className="space-y-4 mt-2">
-              {imagePreview && <div className="flex gap-3"><div className="w-20 h-20 rounded-lg overflow-hidden border border-border shrink-0"><img src={imagePreview} alt="Receipt" className="w-full h-full object-cover" /></div><div className="flex-1">{receipt && <span className="text-xs text-muted-foreground">{receipt.confidence.toFixed(0)}%</span>}</div></div>}
-              <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['ocr.merchant']}</Label><Input value={merchant} onChange={e => setMerchant(e.target.value)} className="h-11" /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['tx.amount']}</Label><div className="relative"><Input type="text" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="0.00" className="h-11 font-mono text-right pr-10" /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{CURRENCIES[currency].symbol}</span></div></div>
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['common.currency']}</Label><Select value={currency} onValueChange={v => setCurrency(v as CurrencyCode)}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(CURRENCIES).map(([code, m]) => <SelectItem key={code} value={code}><span className="flex items-center gap-2"><span style={{ color: m.color }}>{m.symbol}</span>{code}</span></SelectItem>)}</SelectContent></Select></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['common.category']}</Label><Select value={categoryId} onValueChange={setCategoryId}><SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger><SelectContent>{expenseCategories.map(c => <SelectItem key={c.id} value={c.id}><span className="flex items-center gap-2"><span>{c.icon}</span>{localizedCategoryName(c, locale)}</span></SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['common.account']}</Label>{accounts.length > 0 ? <Select value={accountId} onValueChange={setAccountId}><SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger><SelectContent>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent></Select> : <div className="h-11 rounded-md border-2 border-dashed border-warning/40 flex items-center justify-center"><span className="text-xs text-warning">{t['ocr.createAccountWarning']}</span></div>}</div>
-              </div>
-              <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['tx.date']}</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-11" /></div>
-              <Button onClick={handleSave} className="w-full h-11">{t['ocr.saveExpense']}</Button>
-            </div>
-          )}
-          {step === 'done' && (
-            <div className="space-y-4 mt-2 text-center py-4"><div className="w-16 h-16 rounded-full bg-income/10 flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-income" /></div><h3 className="text-lg font-semibold">{t['ocr.expenseAddedTitle']}</h3><Button className="h-11" onClick={() => handleOpenChange(false)}>{t['common.close']}</Button></div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['tx.date']}</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-11" /></div>
+            <Button onClick={handleSave} className="w-full h-11">{t['ocr.saveExpense']}</Button>
+          </div>
+        )}
+        {step === 'done' && (
+          <div className="space-y-4 mt-2 text-center py-4"><div className="w-16 h-16 rounded-full bg-income/10 flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-income" /></div><h3 className="text-lg font-semibold">{t['ocr.expenseAddedTitle']}</h3><Button className="h-11" onClick={() => handleOpenChange(false)}>{t['common.close']}</Button></div>
+        )}
+      </CrudDialog>
     </>
   );
 }

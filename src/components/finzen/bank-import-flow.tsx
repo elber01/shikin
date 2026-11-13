@@ -4,7 +4,6 @@ import { useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from '@/components/ui/table';
 import { Building2, Upload, CheckCircle2 } from 'lucide-react';
@@ -17,6 +16,8 @@ import { parseCSVLine } from '@/lib/finzen/csv';
 import { parseOfxStatement } from '@/lib/finzen/ofx';
 import { BANK_PRESETS, autoMapColumns, parseBankAmount, type BankPreset } from '@/lib/finzen/bank-presets';
 import { localizedPair } from '@/lib/finzen/localize';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
+import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
 
 interface ParsedBankTx {
   date: string;
@@ -226,118 +227,127 @@ export function BankImportFlow() {
           <div className="flex gap-1.5 mt-3"><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">CSV</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">OFX</span><span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface-2">QFX</span></div>
         </button>
       </Card>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto scroll-area">
-          <input ref={fileInputRef} type="file" accept=".csv,.ofx,.qfx,.txt,text/csv" className="hidden" onChange={handleFileSelect} />
-          <DialogHeader><DialogTitle>{dialogTitle}</DialogTitle></DialogHeader>
-          {step === 'bank' && (
-            <div className="space-y-2 mt-2">
-              {BANK_PRESETS.map(b => (
-                <button
-                  key={b.key}
-                  type="button"
-                  className="w-full p-4 border border-border rounded-lg hover:bg-surface-2 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  onClick={() => { setPreset(b); setStep('upload'); }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold">{b.key === 'generic' ? t['import.bankOther'] : localizedPair(b.name, b.nameEn, locale)}</div>
-                    <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface shrink-0">{b.key === 'generic' ? 'CSV · OFX' : 'CSV'}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{localizedPair(b.hint, b.hintEn, locale)}</div>
-                </button>
+      <CrudDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title={dialogTitle}
+        maxWidth="lg"
+        contentClassName="max-h-[90vh] overflow-y-auto scroll-area"
+      >
+        <input ref={fileInputRef} type="file" accept=".csv,.ofx,.qfx,.txt,text/csv" className="hidden" onChange={handleFileSelect} />
+        {step === 'bank' && (
+          <div className="space-y-2 mt-2">
+            {BANK_PRESETS.map(b => (
+              <button
+                key={b.key}
+                type="button"
+                className="w-full p-4 border border-border rounded-lg hover:bg-surface-2 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => { setPreset(b); setStep('upload'); }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold">{b.key === 'generic' ? t['import.bankOther'] : localizedPair(b.name, b.nameEn, locale)}</div>
+                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface shrink-0">{b.key === 'generic' ? 'CSV · OFX' : 'CSV'}</span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">{localizedPair(b.hint, b.hintEn, locale)}</div>
+              </button>
+            ))}
+          </div>
+        )}
+        {step === 'upload' && preset && (
+          <div className="space-y-4 mt-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <EmptyState
+                surface="plain"
+                icon={<Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />}
+                titleAs="p"
+                titleClassName="text-sm font-medium mb-0"
+                title={localizedPair(preset.name, preset.nameEn, locale)}
+                description={t['import.bankUploadHint']}
+                descriptionClassName="text-xs text-muted-foreground mt-1 mb-0 max-w-none mx-0"
+              />
+            </button>
+          </div>
+        )}
+        {step === 'mapping' && (
+          <div className="space-y-4 mt-2">
+            <div className="text-sm text-muted-foreground">{t['bank.rows'].replace('{n}', String(rows.length))}</div>
+            <div className="space-y-3">
+              {MAP_FIELDS.map(f => (
+                <div key={f.key} className="grid grid-cols-2 gap-3 items-center">
+                  <div className="text-sm font-medium">{f.label}{f.required && <span className="text-expense ml-1">*</span>}</div>
+                  <Select value={mapping[f.key] ?? ''} onValueChange={v => setMapping(m => ({ ...m, [f.key]: v }))}>
+                    <SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>{headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               ))}
             </div>
-          )}
-          {step === 'upload' && preset && (
-            <div className="space-y-4 mt-2">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">{localizedPair(preset.name, preset.nameEn, locale)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{t['import.bankUploadHint']}</p>
-              </button>
+            <Button className="w-full h-11" disabled={!mapping.date || (!mapping.amount && !(mapping.debit && mapping.credit))} onClick={handleContinueToPreview}>{t['bank.continue']}</Button>
+          </div>
+        )}
+        {step === 'preview' && previewData && (
+          <div className="space-y-4 mt-2">
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{parsed.length} {t['import.bankDetected']}</span>
+              <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{t['import.bankRange']}: {formatDate(parseLocalDate(previewData.min), locale)} → {formatDate(parseLocalDate(previewData.max), locale)}</span>
+              <span className="text-xs px-2 py-1 rounded-md bg-income-soft text-income">{previewData.income} {t['bank.income']}</span>
+              <span className="text-xs px-2 py-1 rounded-md bg-expense-soft text-expense">{previewData.expense} {t['bank.expenses']}</span>
+              {isOfx && <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{t['import.bankOfxAuto']}</span>}
+              {isOfx && ofxCurrency && ofxCurrency !== targetCurrency && (
+                <span className="text-xs px-2 py-1 rounded-md bg-warning-soft text-warning">
+                  {t['bank.currencyMismatch'].replace('{from}', ofxCurrency).replace('{to}', targetCurrency)}
+                </span>
+              )}
+              {previewData.duplicates > 0 && <span className="text-xs px-2 py-1 rounded-md bg-warning-soft text-warning">{previewData.duplicates} {t['import.bankDuplicates']}</span>}
             </div>
-          )}
-          {step === 'mapping' && (
-            <div className="space-y-4 mt-2">
-              <div className="text-sm text-muted-foreground">{t['bank.rows'].replace('{n}', String(rows.length))}</div>
-              <div className="space-y-3">
-                {MAP_FIELDS.map(f => (
-                  <div key={f.key} className="grid grid-cols-2 gap-3 items-center">
-                    <div className="text-sm font-medium">{f.label}{f.required && <span className="text-expense ml-1">*</span>}</div>
-                    <Select value={mapping[f.key] ?? ''} onValueChange={v => setMapping(m => ({ ...m, [f.key]: v }))}>
-                      <SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger>
-                      <SelectContent>{headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                ))}
-              </div>
-              <Button className="w-full h-11" disabled={!mapping.date || (!mapping.amount && !(mapping.debit && mapping.credit))} onClick={handleContinueToPreview}>{t['bank.continue']}</Button>
-            </div>
-          )}
-          {step === 'preview' && previewData && (
-            <div className="space-y-4 mt-2">
-              <div className="flex flex-wrap gap-1.5">
-                <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{parsed.length} {t['import.bankDetected']}</span>
-                <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{t['import.bankRange']}: {formatDate(parseLocalDate(previewData.min), locale)} → {formatDate(parseLocalDate(previewData.max), locale)}</span>
-                <span className="text-xs px-2 py-1 rounded-md bg-income-soft text-income">{previewData.income} {t['bank.income']}</span>
-                <span className="text-xs px-2 py-1 rounded-md bg-expense-soft text-expense">{previewData.expense} {t['bank.expenses']}</span>
-                {isOfx && <span className="text-xs px-2 py-1 rounded-md bg-surface-2">{t['import.bankOfxAuto']}</span>}
-                {isOfx && ofxCurrency && ofxCurrency !== targetCurrency && (
-                  <span className="text-xs px-2 py-1 rounded-md bg-warning-soft text-warning">
-                    {t['bank.currencyMismatch'].replace('{from}', ofxCurrency).replace('{to}', targetCurrency)}
-                  </span>
-                )}
-                {previewData.duplicates > 0 && <span className="text-xs px-2 py-1 rounded-md bg-warning-soft text-warning">{previewData.duplicates} {t['import.bankDuplicates']}</span>}
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">{t['common.date']}</TableHead>
-                    <TableHead className="text-xs">{t['common.description']}</TableHead>
-                    <TableHead className="text-xs text-right">{t['common.amount']}</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">{t['common.date']}</TableHead>
+                  <TableHead className="text-xs">{t['common.description']}</TableHead>
+                  <TableHead className="text-xs text-right">{t['common.amount']}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parsed.slice(0, 8).map((p, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-xs">{formatDate(parseLocalDate(p.date), locale)}</TableCell>
+                    <TableCell className="text-xs max-w-[220px] truncate">{p.description}</TableCell>
+                    <TableCell className={`text-xs text-right tabular-nums ${p.type === 'income' ? 'text-income' : 'text-expense'}`}>{p.type === 'income' ? '+' : '−'}{formatMoney(p.amount, targetCurrency, locale)}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {parsed.slice(0, 8).map((p, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-xs">{formatDate(parseLocalDate(p.date), locale)}</TableCell>
-                      <TableCell className="text-xs max-w-[220px] truncate">{p.description}</TableCell>
-                      <TableCell className={`text-xs text-right tabular-nums ${p.type === 'income' ? 'text-income' : 'text-expense'}`}>{p.type === 'income' ? '+' : '−'}{formatMoney(p.amount, targetCurrency, locale)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {parsed.length > 8 && (
-                    <TableRow><TableCell colSpan={3} className="text-xs text-muted-foreground text-center">+{parsed.length - 8} {t['common.more']}</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">{t['import.bankTarget']}</Label>
-                <Select value={targetAccountId} onValueChange={setTargetAccountId}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                  <SelectContent>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full h-11" disabled={!targetAccountId} onClick={handleCommit}>{t['import.bankImport']}</Button>
+                ))}
+                {parsed.length > 8 && (
+                  <TableRow><TableCell colSpan={3} className="text-xs text-muted-foreground text-center">+{parsed.length - 8} {t['common.more']}</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">{t['import.bankTarget']}</Label>
+              <Select value={targetAccountId} onValueChange={setTargetAccountId}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
+              </Select>
             </div>
-          )}
-          {step === 'done' && (
-            <div className="space-y-4 mt-2 text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-income/10 flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-income" /></div>
-              <h3 className="text-lg font-semibold">{t['common.importCompleted']}</h3>
-              <div className="bg-surface-2 rounded-lg p-4 text-sm space-y-1 max-w-sm mx-auto text-left">
-                <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankImported']}:</span><span className="font-semibold text-income">{counts.imported}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankDuplicates']}:</span><span>{counts.duplicates}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankInvalid']}:</span><span>{counts.skipped}</span></div>
-              </div>
-              <Button className="h-11" onClick={() => handleOpenChange(false)}>{t['common.close']}</Button>
+            <Button className="w-full h-11" disabled={!targetAccountId} onClick={handleCommit}>{t['import.bankImport']}</Button>
+          </div>
+        )}
+        {step === 'done' && (
+          <div className="space-y-4 mt-2 text-center py-4">
+            <div className="w-16 h-16 rounded-full bg-income/10 flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-income" /></div>
+            <h3 className="text-lg font-semibold">{t['common.importCompleted']}</h3>
+            <div className="bg-surface-2 rounded-lg p-4 text-sm space-y-1 max-w-sm mx-auto text-left">
+              <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankImported']}:</span><span className="font-semibold text-income">{counts.imported}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankDuplicates']}:</span><span>{counts.duplicates}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">{t['import.bankInvalid']}:</span><span>{counts.skipped}</span></div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <Button className="h-11" onClick={() => handleOpenChange(false)}>{t['common.close']}</Button>
+          </div>
+        )}
+      </CrudDialog>
     </>
   );
 }

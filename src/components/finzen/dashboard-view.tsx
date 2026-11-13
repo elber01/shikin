@@ -31,10 +31,31 @@ import {
   type MonthlyFlow,
 } from '@/lib/finzen/finance';
 import { intlLocale, localizedCategoryName, localizedPair } from '@/lib/finzen/localize';
+import { categoryColorVar } from '@/lib/finzen/category-color';
 import { KpiCard } from '@/components/finzen/kpi-card';
+import { StatGrid } from '@/components/finzen/ui/stat-grid';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
 import { TransactionRow } from '@/components/finzen/transaction-row';
 import { useAlerts } from '@/hooks/use-alerts';
 import { useIsMobile } from '@/hooks/use-is-mobile';
+
+/**
+ * Token del icono de alerta por severidad.
+ *
+ * El fondo translúcido usa `color-mix(in oklab, currentColor N%, transparent)`:
+ * un sufijo alpha pegado a una `var()` (`var(--expense)20`) NO es CSS válido —
+ * el navegador lo descarta y el fondo nunca se pintaba. `currentColor` resuelve
+ * al `color` del propio elemento (el token de la severidad), así que el fondo
+ * es siempre una mezcla del mismo color, sin repetir tokens ni usar HEX.
+ */
+const ALERT_ICON_COLOR = {
+  critical: 'var(--expense)',
+  warning: 'var(--warning)',
+  info: 'var(--info)',
+} as const;
+
+/** 12% ≈ el 0x20 (alpha 32/255) que se intentaba con el sufijo inválido. */
+const ALERT_ICON_BG = 'color-mix(in oklab, currentColor 12%, transparent)';
 
 export function DashboardView() {
   const { transactions, accounts, categories, locale, baseCurrency, setActiveView, setAddSheetOpen, setEditingTransactionId, loading } =
@@ -122,7 +143,7 @@ export function DashboardView() {
         return {
           name: cat ? localizedCategoryName(cat, locale) : t['common.other'],
           value: amount,
-          color: cat?.color ?? 'var(--muted-foreground)',
+          color: categoryColorVar(cat?.color),
           icon: cat?.icon ?? '📦',
         };
       })
@@ -219,25 +240,27 @@ export function DashboardView() {
 
       {/* Empty state — no accounts yet */}
       {accounts.length === 0 && transactions.length === 0 ? (
-        <Card className="p-8 text-center shadow-card">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">👋</span>
-          </div>
-          <h2 className="text-xl font-bold mb-2">
-            {t['auth.welcome']}
-          </h2>
-          <p className="text-sm text-muted-foreground mb-5 max-w-md mx-auto">
-            {t['dashboard.emptyHint']}
-          </p>
-          <div className="flex flex-col sm:flex-row gap-2 justify-center">
-            <Button onClick={() => setActiveView('accounts')}>
-              {t['dashboard.emptyCreateAccount']}
-            </Button>
-            <Button variant="outline" onClick={() => setAddSheetOpen(true)}>
-              {t['dashboard.emptyRecordTransaction']}
-            </Button>
-          </div>
-        </Card>
+        <EmptyState
+          className="shadow-card"
+          titleAs="h2"
+          titleClassName="text-xl font-bold mb-2"
+          icon={
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">👋</span>
+            </div>
+          }
+          title={t['auth.welcome']}
+          description={t['dashboard.emptyHint']}
+          descriptionClassName="mb-5 max-w-md"
+          action={{
+            label: t['dashboard.emptyCreateAccount'],
+            onClick: () => setActiveView('accounts'),
+          }}
+          secondaryAction={{
+            label: t['dashboard.emptyRecordTransaction'],
+            onClick: () => setAddSheetOpen(true),
+          }}
+        />
       ) : (
         <>
           {/* Hero: Net Worth — variante gradiente, sparkline con historia real de 12 meses */}
@@ -260,7 +283,7 @@ export function DashboardView() {
           />
 
           {/* Three KPI cards — deltas reales vs mes anterior */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 *:min-w-0">
+          <StatGrid scale="md">
             <KpiCard
               label={t['dashboard.income']}
               amount={formatMoney(totals.income, baseCurrency, locale)}
@@ -287,7 +310,7 @@ export function DashboardView() {
               color="income"
               suffix={t['dashboard.savingsTarget']}
             />
-          </div>
+          </StatGrid>
 
           {/* Cash flow chart */}
           <Card className="p-5 shadow-card">
@@ -429,12 +452,7 @@ export function DashboardView() {
                         : alert.type === 'expense_spike'
                         ? TrendingUp
                         : Lightbulb;
-                    const iconColor =
-                      alert.severity === 'critical'
-                        ? 'var(--expense)'
-                        : alert.severity === 'warning'
-                        ? 'var(--warning)'
-                        : 'var(--info)';
+                    const tone = ALERT_ICON_COLOR[alert.severity];
                     return (
                       <div
                         key={alert.id}
@@ -442,7 +460,7 @@ export function DashboardView() {
                       >
                         <div
                           className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                          style={{ background: `${iconColor}20`, color: iconColor }}
+                          style={{ background: ALERT_ICON_BG, color: tone }}
                         >
                           <Icon className="w-4 h-4" />
                         </div>

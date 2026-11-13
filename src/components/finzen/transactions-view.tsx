@@ -28,6 +28,9 @@ import {
 } from '@/lib/finzen/export';
 import { intlLocale, localizedCategoryName } from '@/lib/finzen/localize';
 import { TransactionRow } from '@/components/finzen/transaction-row';
+import { StatCard } from '@/components/finzen/ui/stat-card';
+import { StatGrid } from '@/components/finzen/ui/stat-grid';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
 
 type DateFilter = 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'last_year' | 'all' | 'specific_month';
 
@@ -177,24 +180,23 @@ export function TransactionsView() {
       {/* Totals — [responsive] 3-col desde md (768px): con la escalera terminando en text-xl,
           el peor monto realista (17 chars ≈ 183px) cabe en ~208px útiles; de 640-767px apiladas
           con text-lg. break-words = última línea de defensa: el dinero se envuelve, jamás se trunca. */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 *:min-w-0">
-        <Card className="p-3">
-          <div className="text-xs text-muted-foreground">{t['dashboard.income']}</div>
-          <div className="text-base sm:text-lg md:text-xl font-bold tabular-nums text-income break-words">
-            {formatMoney(totals.income, baseCurrency as CurrencyCode, locale)}
-          </div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xs text-muted-foreground">{t['dashboard.expenses']}</div>
-          <div className="text-base sm:text-lg md:text-xl font-bold tabular-nums text-expense break-words">
-            {formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)}
-          </div>
-        </Card>
-        <Card className="p-3">
-          <div className="text-xs text-muted-foreground">#</div>
-          <div className="text-base sm:text-lg md:text-xl font-bold tabular-nums">{totals.count}</div>
-        </Card>
-      </div>
+      <StatGrid scale="sm" className="gap-3">
+        <StatCard
+          className="p-3"
+          label={t['dashboard.income']}
+          value={formatMoney(totals.income, baseCurrency as CurrencyCode, locale)}
+          tone="income"
+          scale="sm"
+        />
+        <StatCard
+          className="p-3"
+          label={t['dashboard.expenses']}
+          value={formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)}
+          tone="expense"
+          scale="sm"
+        />
+        <StatCard className="p-3" label="#" value={String(totals.count)} scale="sm" />
+      </StatGrid>
 
       {/* Filters */}
       <Card className="p-3 space-y-2">
@@ -264,23 +266,30 @@ export function TransactionsView() {
       <Card className="p-2">
         {grouped.length === 0 ? (
           transactions.length === 0 ? (
-            <div className="py-12 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
-                <Receipt className="w-7 h-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-semibold mb-1">{t['transactions.noTransactions']}</h3>
-              <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
-                {t['transactions.emptyHint']}
-              </p>
-              <Button size="sm" className="h-11 min-h-11" onClick={() => setAddSheetOpen(true)}>
-                <Plus className="w-4 h-4 mr-1" />
-                {t['transactions.emptyCta']}
-              </Button>
-            </div>
+            <EmptyState
+              surface="plain"
+              className="py-12 text-center"
+              icon={
+                <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
+                  <Receipt className="w-7 h-7 text-muted-foreground" />
+                </div>
+              }
+              title={t['transactions.noTransactions']}
+              description={t['transactions.emptyHint']}
+              action={{
+                label: t['transactions.emptyCta'],
+                onClick: () => setAddSheetOpen(true),
+                icon: <Plus className="w-4 h-4 mr-1" />,
+              }}
+            />
           ) : (
-            <div className="text-center text-sm text-muted-foreground py-12">
-              {t['transactions.noTransactions']}
-            </div>
+            <EmptyState
+              surface="plain"
+              className="text-center text-sm text-muted-foreground py-12"
+              titleAs="p"
+              titleClassName="text-sm font-normal text-muted-foreground mb-0"
+              title={t['transactions.noTransactions']}
+            />
           )
         ) : (
           <div className="space-y-3">

@@ -1,7 +1,45 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { db } from '@/lib/db';
+import {
+  deleteCategoryForUser,
+  updateCategoryForUser,
+  type CategoryInput,
+} from '@/lib/services/categories-service';
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Lee el body y lo reduce a los campos tipados del servicio.
+ *
+ * `color` distingue TRES estados (la REGLA es del servicio, no del adaptador):
+ * - ausente → `undefined` → el servicio conserva el color actual
+ * - `null` / `''` → resetear al fallback (`cat-12`)
+ * - valor → normalizar a token
+ *
+ * Por eso `color` solo se incluye cuando la clave venía en el body: el
+ * adaptador traduce "ausente", pero no decide qué hacer con el color.
+ */
+async function readCategoryInput(req: Request): Promise<CategoryInput> {
+  let raw: unknown = {};
+  try {
+    raw = await req.json();
+  } catch {
+    raw = {};
+  }
+  const body = isRecord(raw) ? raw : {};
+  const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  return {
+    name: str(body.name),
+    nameEs: str(body.nameEs),
+    nameEn: str(body.nameEn),
+    icon: str(body.icon),
+    direction: str(body.direction),
+    ...('color' in body ? { color: str(body.color) } : {}),
+  };
+}
 
 export async function PATCH(
   req: Request,
@@ -9,35 +47,26 @@ export async function PATCH(
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
-  const body = await req.json();
-  const { name, nameEs, nameEn, icon, color, direction } = body;
 
-  // Verify ownership
-  const existing = await db.category.findFirst({
-    where: { id, userId: session.user.id },
-  });
+  // Thin adapter — every rule (incl. color normalization) lives in the service.
+  const result = await updateCategoryForUser(
+    session.user.id,
+    id,
+    await readCategoryInput(req)
+  );
 
-  if (!existing) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.message, code: result.code },
+      { status: result.code === 'not_found' ? 404 : 400 }
+    );
   }
 
-  const updated = await db.category.update({
-    where: { id },
-    data: {
-      name: name ?? existing.name,
-      nameEs: nameEs ?? existing.nameEs,
-      nameEn: nameEn ?? existing.nameEn,
-      icon: icon ?? existing.icon,
-      color: color ?? existing.color,
-      direction: direction ?? existing.direction,
-    },
-  });
-
-  return NextResponse.json(updated);
+  return NextResponse.json(result.category);
 }
 
 export async function DELETE(
@@ -46,53 +75,26 @@ export async function DELETE(
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 });
   }
 
   const { id } = await params;
 
-  // Verify ownership
-  const existing = await db.category.findFirst({
-    where: { id, userId: session.user.id },
-  });
+  // Thin adapter — ownership + referential integrity live in the service.
+  const result = await deleteCategoryForUser(session.user.id, id);
 
-  if (!existing) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
-
-  // System categories cannot be deleted
-  if (existing.isSystem) {
+  if (!result.ok) {
+    const status =
+      result.code === 'not_found'
+        ? 404
+        : result.code === 'system_category_not_deletable'
+          ? 403
+          : 409;
     return NextResponse.json(
-      { error: 'System categories cannot be deleted' },
-      { status: 403 }
+      { error: result.message, code: result.code, transactionCount: result.transactionCount },
+      { status }
     );
   }
-
-  // Check if category has transactions
-  const txCount = await db.transaction.count({
-    where: { categoryId: id, userId: session.user.id },
-  });
-
-  if (txCount > 0) {
-    return NextResponse.json(
-      { error: `Cannot delete: ${txCount} transactions use this category. Reassign them first.` },
-      { status: 409 }
-    );
-  }
-
-  // Check budget items
-  const budgetItemCount = await db.budgetItem.count({
-    where: { categoryId: id },
-  });
-
-  if (budgetItemCount > 0) {
-    return NextResponse.json(
-      { error: `Cannot delete: ${budgetItemCount} budget items use this category. Remove them first.` },
-      { status: 409 }
-    );
-  }
-
-  await db.category.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
 }

@@ -6318,3 +6318,215 @@ traducida **con el número de transacciones**.
 | `src/store/finzen-store.ts` | `ApiError` + `code`/`transactionCount`; `addBudgetItem` persiste |
 | `src/lib/finzen/i18n.ts` | 390 claves con paridad es/en estricta; 0 `locale === 'es' ?` |
 | `src/components/finzen/*.tsx` (17) | i18n, a11y, targets 44px, export unificado, rango/gráfico alineado, drag & drop real, 0 white |
+
+## PHASE 10 — U1: design system propio + color de categoría como token + i18n derivado + limpieza
+
+**Task ID:** 10-U1
+**Agent:** Coordinador → Planificador → Implementador → Revisor
+**Owner:** Edwin (aprobación: "adelante", 12-nov-2026)
+**Status:** ✅ Cerrado — revisor APRUEBA, 0 bloqueantes, `bun run verify` exit 0
+**Base:** `7a53c1f` (10-U0, ya commiteado y desplegado)
+
+### Objetivo
+
+Cerrar las deudas #13, #14 y #15 de `MEMORY.md` §5: que el color de categoría
+sea un token semántico con dark mode, que exista un design system propio de
+dominio, que el i18n no dependa de un union type manual, y que se elimine el
+residuo de plantilla. **Sin tocar el contrato público v1.**
+
+### Spec primero (coordinador, antes del código)
+
+| Documento | Cambio |
+|---|---|
+| `SDD.md` §2 | El color **no** es parte del contrato v1: las rutas v1 no aceptan `color` y la autocreación deja `color = null` → fallback `cat-12` |
+| `SDD.md` §4 | `Category.color` = **clave de token** `cat-1..cat-12` (nunca HEX; el CSS se resuelve en la vista) |
+| `SDD.md` §5 | Nueva convención transversal 7: "color de datos = token" |
+| `skills.md` §3 | `resolve_category` ampliado + skill nueva `normalize_category_color` (formato de alta completo) |
+| `agents/orchestrator.md` | `normalize_category_color` en la tabla de delegación + directiva al system prompt |
+| `AGENTS.md` §5 | Convención "color de categoría = token" (leer: clave `cat-N`, HEX solo al leer, nunca al pintar) |
+| `AGENTS.md` §6 | Mapa del repo: `src/components/finzen/ui/` = design system de dominio (vs `components/ui/` = shadcn) |
+
+### B1 — Color de categoría como token
+
+- **Tokens:** `--cat-1..--cat-12` en `src/app/globals.css` (`:root` light +
+  `.dark` dark) + mapeos `--color-cat-N` en `@theme inline`. Los 13 HEX
+  actuales del seed mapean a 12 claves; la única fusión es `#10B981` → `cat-1`.
+- **Módulo puro** `src/lib/finzen/category-color.ts`: `CATEGORY_COLOR_KEYS`,
+  `CATEGORY_COLOR_HEX`, `isCategoryColorKey` (`/^(cat-(1[0-2]|[1-9]))$/`),
+  `normalizeCategoryColor`, `categoryColorVar`, `categoryColorSoft`,
+  `categoryColorCss`. HEX → **vecino más cercano en OKLab** (sRGB→lineal→
+  OKLab, ΔE euclídeo, empate → índice menor). **La salida nunca contiene un
+  HEX**: siempre `var(--cat-N)` → el código es tolerante a HEX heredado y se
+  puede desplegar antes de migrar los datos.
+- **Conflicto de spec resuelto:** el plan fijaba `#10B981` → `cat-1` por
+  decisión de producto, pero el vecino OKLab puro da `cat-2` (ΔE 0.0547 vs
+  0.1025). Solución: `LEGACY_CATEGORY_COLOR_ALIASES` se consulta **antes**
+  del vecino (aplica en el servicio y en la migración) y
+  `nearestCategoryColorKey` queda **puro** (las 12 anclas mapean a sí
+  mismas). El revisor recalculó la conversión desde cero y confirmó ambos
+  comportamientos.
+- **Servicio** `src/lib/services/categories-service.ts`:
+  `create/update/deleteCategoryForUser` con ownership (`findFirst` por
+  `userId` → 404 si no es dueño), categorías de sistema no borrables (403),
+  borrado protegido (409 `category_has_transactions` / `category_in_budget`) y
+  normalización del color. Las rutas `/api/categories` y
+  `/api/categories/[id]` quedaron como adaptadores delgados con
+  `{ error, code }` (espejo del precedente 409 de `/api/accounts/[id]`).
+- **Seed y picker:** `prisma/seed.ts` y `src/lib/finzen/default-categories.ts`
+  con claves `cat-N`; el picker de `categories-manager.tsx` muestra los 12
+  tokens (`background: var(--cat-N)`).
+- **Script** `scripts/migrate-category-colors.ts` (TS, ejecutado por Bun):
+  `--dry-run` por defecto, `--apply` (backup `db/category-colors.<ts>.backup`),
+  `--rollback <archivo>`, idempotente, lotes de 100 en transacción, y gate
+  `--allow-production` obligatorio para **cualquier** modo contra `libsql:`
+  (corta antes de conectar).
+
+### B2 — Design system propio (`src/components/finzen/ui/`)
+
+10 ficheros nuevos: `stat-scale.ts`, `stat-card.tsx`, `stat-grid.tsx`,
+`empty-state.tsx`, `confirm-delete.tsx`, `icon-button.tsx`, `progress-bar.tsx`,
+`currency-select.tsx`, `crud-dialog.tsx`, `category-icon.tsx`.
+
+**`STAT_SCALE` es la fuente única** del techo de fuente y del breakpoint del
+grid (`sm` → `text-xl`/`md:grid-cols-3`, `md` → `text-2xl`/`lg:grid-cols-3`,
+`lg` → `text-4xl`/`lg:grid-cols-3`), lo que hace **imposible** que diverjan
+— exactamente el bug que causó la fase 8.7 (el techo `text-2xl` desbordaba
+en el grid de 640-1023px). El grid siempre lleva `*:min-w-0` y los montos
+`break-words` (nunca ellipsis).
+
+`IconButton` normaliza el target ≥40×40 + `aria-label`; `ConfirmDelete`
+envuelve `AlertDialog` con `bg-expense text-primary-foreground`; `ProgressBar`
+lleva `role="progressbar"` + `aria-valuenow/min/max`; `CrudDialog` tiene modo
+asistente (sin `<form>` ni botón) para los 3 wizards, para no alterar su
+flujo multi-paso.
+
+**Refactor sin cambio visual**, salvo 3 deltas menores aceptados (CTA de
+empty states 36→44px por HIG, tono del `IconButton` de copiar, y el bucket
+"sin categoría" `var(--muted-foreground)` → `var(--cat-12)`).
+
+### B3 — i18n con tipo derivado
+
+`src/lib/finzen/i18n.ts`: el union manual de ~390 líneas desaparece.
+
+```ts
+const es = { … } satisfies Record<string, string>;
+export type TranslationKey = keyof typeof es;
+const en: Record<TranslationKey, string> = { … };
+export const translations: Record<Locale, Record<TranslationKey, string>> = { es, en };
+```
+
+Ahora **el compilador** garantiza la paridad es/en (una clave faltante en
+`en` → TS2741; una extra → TS2353). `TranslationKey` sigue exportado y los
+~390 call-sites `t['clave']` **no cambian**. Al final de la fase: **402
+claves** (390 + 12 de los swatches de color; ver aviso A6).
+
+### B4 — Limpieza de residuo
+
+- **34 ficheros borrados:** 30 primitivas shadcn sin uso (`alert`,
+  `aspect-ratio`, `avatar`, `badge`, `breadcrumb`, `carousel`, `chart`,
+  `checkbox`, `collapsible`, `context-menu`, `drawer`, `form`, `hover-card`,
+  `input-otp`, `menubar`, `navigation-menu`, `pagination`, `progress`,
+  `radio-group`, `resizable`, `scroll-area`, `sidebar`, `slider`, `switch`,
+  `textarea`, `toast`, `toaster`, `toggle`, `toggle-group`, `tooltip`) +
+  `src/hooks/use-toast.ts` + `src/hooks/use-mobile.ts` +
+  `src/lib/finzen/mock-data.ts` + `tailwind.config.ts` (config legacy de
+  Tailwind 3 `hsl(var(--x))` que **nunca se aplicó** — `components.json`
+  declara `"config": ""` → era una trampa para futuras sesiones).
+  **Se conservan** las 7 que sí se usan (el brief original las listaba como
+  muertas: `calendar`, `table`, `dropdown-menu`, `popover`, `tabs`,
+  `accordion`, `separator`) y `command` (se usará en U2).
+- **35 deps purgadas** con `bun remove` (incluidas las que solo existían
+  para las primitivas borradas): `@tanstack/*`, `@mdxeditor/editor`,
+  `@dnd-kit/*`, `@reactuses/core`, `next-intl`, `z-ai-web-dev-sdk`, `uuid`,
+  `react-syntax-highlighter`, `react-resizable-panels`, `embla-carousel-react`,
+  `vaul`, `input-otp`, `react-hook-form`, `@hookform/resolvers`,
+  `react-markdown`, 15 `@radix-ui/react-*` y `tailwindcss-animate` (muerto
+  tras borrar `tailwind.config.ts`; las utilidades `animate-*` vienen de
+  `tw-animate-css`).
+  **Se conservan** `cmdk` (U2), `zod` (bloque de agentes) y `sonner`.
+- **Guardrail del lockfile RESPETADO:** `bun.lock` pasó de 998 → 654
+  paquetes: **344 eliminaciones, 0 añadidos**, con una única excepción
+  conocida y verificada: `uuid@11.1.0` (directa) → `uuid@8.3.2` (hoisted),
+  **mismo sha512** que el `next-auth/uuid` anidado previo. Cero cambios
+  ajenos de versión/sha.
+
+### Fix del harness (hallazgo del implementador, era bloqueante)
+
+`bun run verify` estaba **ROJO** en Windows: el script `build` de
+`package.json` terminaba con `cp -r .next/static … && cp -r public …` →
+`cp: illegal option -- r`. **Preexistente** (todas las fases anteriores lo
+evitaron corriendo eslint/tsc/next build por partes) pero bloqueaba la
+barrera canónica. Resuelto con `scripts/copy-standalone.mjs` (ESM,
+`fs.cpSync` recursivo, mensaje claro si falta `.next/standalone`) y
+`package.json` → `"build": "next build && node scripts/copy-standalone.mjs"`,
+`vercel-build` equivalente (generate → build → copia, idéntico en Linux).
+
+### Bugs de CSS inválido arreglados (2)
+
+`` background: `${iconColor}20` `` (`dashboard-view.tsx`) y
+`` background: `${m2.color}15` `` (`accounts-view.tsx`) generaban
+`var(--expense)20` y `var(--info)15` → **no son CSS válidos**, el fondo
+nunca se pintaba. Ahora `color-mix(in oklab, currentColor 12%/8%, transparent)`.
+
+### 3 avisos del revisor resueltos antes de cerrar
+
+| Aviso | Qué era | Resolución |
+|---|---|---|
+| **A1** | **Regresión real**: `PATCH /api/categories/[id]` **sin** `color` reseteaba la categoría a `cat-12` (en HEAD preservaba). No alcanzable desde la UI actual, pero cualquier cliente con PATCH parcial perdía el color. | El adaptador solo incluye `color` cuando la clave viene en el body (`'color' in body`); el servicio es la única fuente de la regla: ausente → preserva + normaliza · `null`/`''` → `cat-12` · valor → token. Verificado: `{name}`→conserva · `{color:null}`→`cat-12` · `{color:'cat-5'}`→`cat-5` · `{color:'#059669'}`→`cat-1` |
+| **A5** | El gate `--allow-production` solo cubría `--apply`: un `--dry-run` contra `libsql://` abría conexión de lectura a Turso sin la flag. | El gate cubre dry-run/apply/rollback y corta **antes** de `createPrisma` (verificado: refusal en 228 ms contra una IP no enrutable) |
+| **A6** | Swatches de color sin `aria-label`/`aria-pressed` y con target 32×32 (<40px) | `aria-label` i18n (12 claves nuevas → 402), `aria-pressed={selected}`, target ≥40×40, swatch circular conservado |
+
+### Verificación
+
+- **`bun run verify` exit 0** (lint + typecheck + build + copia portable),
+  ejecutado por implementador, revisor y coordinador. `bun` v1.4.4 obtenido
+  con `npm install --no-save --no-package-lock bun` (dentro de `node_modules`,
+  gitignored; `package.json` y lockfiles intactos salvo las purgas
+  aprobadas; sin `package-lock.json`).
+- **Revisor: APRUEBA, 0 bloqueantes.** Recalculó la matemática OKLab desde
+  cero (las 12 anclas mapean a sí mismas; `#059669`→`cat-1`,
+  `#F59E0B`→`cat-5`, `#6B7280`→`cat-12`, basura/`null`→`cat-12`; el alias
+  `#10B981`→`cat-1` aplica en servicio y migración sin contaminar el vecino
+  puro). Verificó el sha512 de `uuid`, la forma de las respuestas de categorías,
+  el build portable, el mapeo del seed y que las 10 primitivas en uso existen.
+- **Greps:** `bg-white|text-white|text-gray-*` → 0 en lo tocado · HEX de 6
+  dígitos → solo las anclas de `category-color.ts` · alpha sobre `var()` → 0
+  en código · `as any` nuevos → 0 (los 2 preexistentes intactos) ·
+  `locale === 'es' ?` → 0 · imports de los 34 borrados → 0 · paridad i18n
+  402/402/402 por script.
+- **Intactos:** `prisma/schema.prisma`, `src/lib/auth/**`, `src/lib/db.ts`,
+  **todo** `/api/v1/**`, `finance.ts` y `finzen-store.ts` → doble entrada,
+  net worth y contrato v1 sin tocar. Ninguna `Transaction` creada o
+  modificada.
+- **La migración NO se ejecutó contra Turso.** Solo dry-run/apply/rollback
+  sobre la BD local y copias temporales (borradas). El gate de producción
+  está probado.
+
+### Pendiente de decisión del dueño
+
+**Migrar los colores de la BD de producción (Turso) a claves de token.**
+
+```
+bun scripts/migrate-category-colors.ts --dry-run --allow-production   # ver el mapa
+bun scripts/migrate-category-colors.ts --apply --allow-production      # escribir (con backup)
+bun scripts/migrate-category-colors.ts --rollback db/category-colors.<ts>.backup
+```
+
+Riesgo: bajo (UPDATE de una columna de presentación, determinista, con backup
+y rollback) pero **toca datos de producción** → requiere su visto bueno.
+Mientras tanto la app funciona igual: resuelve HEX heredado al token más
+cercano en runtime.
+
+### Deuda que esta fase deja abierta
+
+- `src/hooks/use-alerts.ts` sigue resolviendo el nombre de categoría por su
+  cuenta (3 sitios) → debería usar `localizedCategoryName()` (deuda #17).
+- `apiFetch` devuelve `any` → falta el genérico `apiFetch<T>` (deuda #18).
+- `text-white` en la variante `destructive` de `ui/button.tsx` (deuda #16;
+  requiere excepción del dueño o un wrapper).
+- **Cero tests automatizados** — la Fase 0 del roadmap (`SDD.md` §6) sigue
+  siendo el blocker de todo lo demás, y ahora es más urgente: la fase de
+  agentes (multi-tenant) necesita la red de seguridad de Vitest.
+- La consola de agentes (multi-tenant, endpoint OpenAI-compatible) sigue
+  sin empezar: Fase 0 → Fase 1 (capa de servicios) → capa de tools + log
+  auditable + undo → consola in-app → servidor MCP.

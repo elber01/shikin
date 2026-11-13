@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
+import { STAT_SCALE } from '@/components/finzen/ui/stat-scale';
 
 interface KpiCardProps {
   label: string;
@@ -100,7 +101,9 @@ export function KpiCard({
         <div
           className={cn(
             'font-bold tabular-nums mt-1 tracking-tight break-words',
-            size === 'hero' ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl'
+            // La escala vive en STAT_SCALE (fuente única): el techo de fuente
+            // y el breakpoint del grid no pueden divergir.
+            STAT_SCALE[size === 'hero' ? 'lg' : 'md'].amount
           )}
           style={{ color: isGradient ? undefined : size === 'hero' ? 'var(--foreground)' : colorVar }}
         >

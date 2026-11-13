@@ -4,7 +4,6 @@ import { useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileSpreadsheet, CheckCircle2, Download, Upload, FileText, Database } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,6 +21,8 @@ import {
 import { cn } from '@/lib/utils';
 import { OcrFlow } from '@/components/finzen/ocr-flow';
 import { BankImportFlow } from '@/components/finzen/bank-import-flow';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
+import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
 
 type Step = 'upload' | 'mapping' | 'done';
 
@@ -173,67 +174,76 @@ export function ImportView() {
           <Button variant="outline" size="sm" className="h-11 min-h-11" onClick={() => exportData('json')}><Database className="w-4 h-4 mr-1.5" />JSON</Button>
         </div>
       </Card>
-      <Dialog open={importOpen} onOpenChange={o => { if (!o) setImportOpen(false); }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto scroll-area">
-          <DialogHeader><DialogTitle>{t['import.importCsvTitle']}</DialogTitle></DialogHeader>
-          {/* File input INSIDE the Dialog so the click works from within the portal */}
-          <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileUpload} />
-          {step === 'upload' && (
-            <div className="space-y-4 mt-2">
-              {/* Drop zone real: click para elegir archivo + arrastrar y soltar */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  const file = e.dataTransfer.files?.[0];
-                  if (file) parseCsvFile(file);
-                }}
-                className={cn(
-                  'w-full border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
-                  isDragging ? 'border-primary bg-surface-2' : 'border-border hover:bg-surface-2'
-                )}
-              >
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">{t['import.selectCsv']}</p>
-                <p className="text-xs text-muted-foreground mt-1">{t['import.csvDesc']}</p>
-              </button>
-              <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['import.bankTarget']}</Label>
-                <Select value={targetAccountId} onValueChange={setTargetAccountId}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent></Select>
-              </div>
+      <CrudDialog
+        open={importOpen}
+        onOpenChange={o => { if (!o) setImportOpen(false); }}
+        title={t['import.importCsvTitle']}
+        maxWidth="lg"
+        contentClassName="max-h-[90vh] overflow-y-auto scroll-area"
+      >
+        {/* File input INSIDE the Dialog so the click works from within the portal */}
+        <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFileUpload} />
+        {step === 'upload' && (
+          <div className="space-y-4 mt-2">
+            {/* Drop zone real: click para elegir archivo + arrastrar y soltar */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) parseCsvFile(file);
+              }}
+              className={cn(
+                'w-full border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+                isDragging ? 'border-primary bg-surface-2' : 'border-border hover:bg-surface-2'
+              )}
+            >
+              <EmptyState
+                surface="plain"
+                icon={<Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />}
+                titleAs="p"
+                titleClassName="text-sm font-medium mb-0"
+                title={t['import.selectCsv']}
+                description={t['import.csvDesc']}
+                descriptionClassName="text-xs text-muted-foreground mt-1 mb-0 max-w-none mx-0"
+              />
+            </button>
+            <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t['import.bankTarget']}</Label>
+              <Select value={targetAccountId} onValueChange={setTargetAccountId}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent>{accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent></Select>
             </div>
-          )}
-          {step === 'mapping' && (
-            <div className="space-y-4 mt-2">
-              <div className="text-sm text-muted-foreground">{t['import.mapColumns'].replace('{n}', String(allRows.length))}</div>
-              <div className="space-y-3">
-                {CANONICAL_FIELDS.map(f => (
-                  <div key={f.key} className="grid grid-cols-2 gap-3 items-center">
-                    <div className="text-sm font-medium">{f.label}{f.required && <span className="text-expense ml-1">*</span>}</div>
-                    <Select value={mapping[f.key] ?? ''} onValueChange={v => setMapping(m => ({ ...m, [f.key]: v }))}><SelectTrigger className="h-10"><SelectValue placeholder="—" /></SelectTrigger><SelectContent>{headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent></Select>
-                  </div>
-                ))}
-              </div>
-              <Button className="w-full h-11" disabled={!mapping.date || !mapping.amount} onClick={handleCommit}>{t['import.importCount'].replace('{n}', String(allRows.length))}</Button>
+          </div>
+        )}
+        {step === 'mapping' && (
+          <div className="space-y-4 mt-2">
+            <div className="text-sm text-muted-foreground">{t['import.mapColumns'].replace('{n}', String(allRows.length))}</div>
+            <div className="space-y-3">
+              {CANONICAL_FIELDS.map(f => (
+                <div key={f.key} className="grid grid-cols-2 gap-3 items-center">
+                  <div className="text-sm font-medium">{f.label}{f.required && <span className="text-expense ml-1">*</span>}</div>
+                  <Select value={mapping[f.key] ?? ''} onValueChange={v => setMapping(m => ({ ...m, [f.key]: v }))}><SelectTrigger className="h-10"><SelectValue placeholder="—" /></SelectTrigger><SelectContent>{headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent></Select>
+                </div>
+              ))}
             </div>
-          )}
-          {step === 'done' && (
-            <div className="space-y-4 mt-2 text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-income/10 flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-income" /></div>
-              <h3 className="text-lg font-semibold">{t['common.importCompleted']}</h3>
-              <div className="bg-surface-2 rounded-lg p-4 text-sm space-y-1 max-w-sm mx-auto">
-                <div className="flex justify-between"><span className="text-muted-foreground">{t['import.importedLabel']}:</span><span className="font-semibold text-income">{importedCount}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t['import.totalInFile']}:</span><span>{allRows.length}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t['import.batchId']}:</span><span className="font-mono text-xs">{t['import.seeTags']}</span></div>
-              </div>
-              <Button className="h-11" onClick={() => { setImportOpen(false); resetWizard(); }}>{t['common.close']}</Button>
+            <Button className="w-full h-11" disabled={!mapping.date || !mapping.amount} onClick={handleCommit}>{t['import.importCount'].replace('{n}', String(allRows.length))}</Button>
+          </div>
+        )}
+        {step === 'done' && (
+          <div className="space-y-4 mt-2 text-center py-4">
+            <div className="w-16 h-16 rounded-full bg-income/10 flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-income" /></div>
+            <h3 className="text-lg font-semibold">{t['common.importCompleted']}</h3>
+            <div className="bg-surface-2 rounded-lg p-4 text-sm space-y-1 max-w-sm mx-auto">
+              <div className="flex justify-between"><span className="text-muted-foreground">{t['import.importedLabel']}:</span><span className="font-semibold text-income">{importedCount}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">{t['import.totalInFile']}:</span><span>{allRows.length}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">{t['import.batchId']}:</span><span className="font-mono text-xs">{t['import.seeTags']}</span></div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <Button className="h-11" onClick={() => { setImportOpen(false); resetWizard(); }}>{t['common.close']}</Button>
+          </div>
+        )}
+      </CrudDialog>
     </div>
   );
 }

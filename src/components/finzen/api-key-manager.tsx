@@ -5,8 +5,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Key, Plus, Copy, Trash2, Check, Bot, Eye, EyeOff } from 'lucide-react';
 import { useFinZenStore } from '@/store/finzen-store';
@@ -14,6 +12,10 @@ import { translations } from '@/lib/finzen/i18n';
 import { intlLocale } from '@/lib/finzen/localize';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
+import { IconButton } from '@/components/finzen/ui/icon-button';
+import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
+import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
 
 interface ApiKeyItem {
   id: string;
@@ -130,12 +132,14 @@ export function ApiKeyManager() {
       </div>
 
       {keys.length === 0 && !loading ? (
-        <div className="py-6 text-center">
-          <Key className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-          <p className="text-xs text-muted-foreground mb-3">
-            {t['apiKeys.emptyHint']}
-          </p>
-        </div>
+        <EmptyState
+          surface="plain"
+          className="py-6 text-center"
+          icon={<Key className="w-10 h-10 mx-auto text-muted-foreground mb-2" />}
+          titleAs="p"
+          titleClassName="text-xs font-normal text-muted-foreground mb-3"
+          title={t['apiKeys.emptyHint']}
+        />
       ) : (
         <div className="space-y-2 max-h-64 overflow-y-auto scroll-area">
           {keys.map(key => (
@@ -161,24 +165,32 @@ export function ApiKeyManager() {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => handleToggle(key.id, key.isActive)} className="p-1.5 rounded-md hover:bg-surface-2 text-muted-foreground min-w-[40px] min-h-[40px] flex items-center justify-center" title={key.isActive ? t['apiKeys.deactivate'] : t['apiKeys.activate']} aria-label={key.isActive ? t['apiKeys.deactivate'] : t['apiKeys.activate']}>
-                  {key.isActive ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                </button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <button className="p-1.5 rounded-md hover:bg-expense-soft text-muted-foreground hover:text-expense min-w-[40px] min-h-[40px] flex items-center justify-center" title={t['a11y.delete']} aria-label={t['a11y.delete']}><Trash2 className="w-3.5 h-3.5" /></button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{t['apiKeys.revokeTitle']}</AlertDialogTitle>
-                      <AlertDialogDescription>{t['apiKeys.revokeBody']}</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{t['common.cancel']}</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(key.id)} className="bg-expense text-primary-foreground hover:bg-expense/90">{t['apiKeys.revoke']}</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <IconButton
+                  icon={key.isActive ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  label={key.isActive ? t['apiKeys.deactivate'] : t['apiKeys.activate']}
+                  title={key.isActive ? t['apiKeys.deactivate'] : t['apiKeys.activate']}
+                  onClick={() => handleToggle(key.id, key.isActive)}
+                  size="sm"
+                  className="hover:text-muted-foreground"
+                />
+                <ConfirmDelete
+                  trigger={
+                    <IconButton
+                      icon={<Trash2 className="w-3.5 h-3.5" />}
+                      label={t['a11y.delete']}
+                      title={t['a11y.delete']}
+                      variant="danger"
+                      size="sm"
+                    />
+                  }
+                  title={t['apiKeys.revokeTitle']}
+                  description={t['apiKeys.revokeBody']}
+                  confirmLabel={t['apiKeys.revoke']}
+                  cancelLabel={t['common.cancel']}
+                  onConfirm={() => {
+                    void handleDelete(key.id);
+                  }}
+                />
               </div>
             </div>
           ))}
@@ -196,50 +208,62 @@ export function ApiKeyManager() {
         </div>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={o => { if (!o) closeDialog(); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{t['apiKeys.createTitle']}</DialogTitle></DialogHeader>
-          {createdKey ? (
-            <div className="space-y-4 mt-2">
-              <div className="bg-income-soft/30 border border-income/20 rounded-lg p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-income" />
-                  <span className="text-sm font-medium">{t['apiKeys.createdBody']}</span>
-                </div>
-                <div className="relative">
-                  <Input value={createdKey} readOnly className="font-mono text-xs pr-20" />
-                  <button onClick={() => copyToClipboard(createdKey)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md hover:bg-surface-2" title={t['apiKeys.copy']} aria-label={t['apiKeys.copy']}>
-                    {copied ? <Check className="w-3.5 h-3.5 text-income" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {t['apiKeys.useHeader']}
-                  <code className="block mt-1 p-2 bg-surface-2 rounded font-mono">Authorization: Bearer {createdKey.substring(0, 12)}...</code>
-                </div>
+      <CrudDialog
+        open={dialogOpen}
+        onOpenChange={o => { if (!o) closeDialog(); }}
+        title={t['apiKeys.createTitle']}
+        submitLabel={createdKey ? t['apiKeys.done'] : t['apiKeys.create']}
+        onSubmit={(e) => {
+          if (createdKey) {
+            closeDialog();
+            return;
+          }
+          void handleCreate(e);
+        }}
+      >
+        {createdKey ? (
+          <div className="space-y-4">
+            <div className="bg-income-soft/30 border border-income/20 rounded-lg p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-income" />
+                <span className="text-sm font-medium">{t['apiKeys.createdBody']}</span>
               </div>
-              <Button className="w-full h-11" onClick={closeDialog}>{t['apiKeys.done']}</Button>
+              <div className="relative">
+                <Input value={createdKey} readOnly className="font-mono text-xs pr-20" />
+                <IconButton
+                  icon={copied ? <Check className="w-3.5 h-3.5 text-income" /> : <Copy className="w-3.5 h-3.5" />}
+                  label={t['apiKeys.copy']}
+                  title={t['apiKeys.copy']}
+                  onClick={() => copyToClipboard(createdKey)}
+                  size="sm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                />
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {t['apiKeys.useHeader']}
+                <code className="block mt-1 p-2 bg-surface-2 rounded font-mono">Authorization: Bearer {createdKey.substring(0, 12)}...</code>
+              </div>
             </div>
-          ) : (
-            <form onSubmit={handleCreate} className="space-y-4 mt-2">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">{t['apiKeys.agentName']}</Label>
-                <Input value={newKeyName} onChange={e => setNewKeyName(e.target.value)} placeholder={t['apiKeys.agentNamePlaceholder']} className="h-11" required />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">{t['apiKeys.permissions']}</Label>
-                <Select value={newKeyPerms} onValueChange={setNewKeyPerms}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="read,write">{t['apiKeys.readWrite']}</SelectItem>
-                    <SelectItem value="read">{t['apiKeys.readOnly']}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full h-11">{t['apiKeys.create']}</Button>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">{t['apiKeys.agentName']}</Label>
+              <Input value={newKeyName} onChange={e => setNewKeyName(e.target.value)} placeholder={t['apiKeys.agentNamePlaceholder']} className="h-11" required />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">{t['apiKeys.permissions']}</Label>
+              <Select value={newKeyPerms} onValueChange={setNewKeyPerms}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="read,write">{t['apiKeys.readWrite']}</SelectItem>
+                  <SelectItem value="read">{t['apiKeys.readOnly']}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+      </CrudDialog>
     </Card>
   );
 }

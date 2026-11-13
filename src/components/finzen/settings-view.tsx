@@ -3,29 +3,11 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { useTheme } from 'next-themes';
 import { useSession, signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
@@ -58,6 +40,8 @@ import { localeFlag, localizedPair } from '@/lib/finzen/localize';
 import { cn } from '@/lib/utils';
 import { CategoriesManager } from '@/components/finzen/categories-manager';
 import { ApiKeyManager } from '@/components/finzen/api-key-manager';
+import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
+import { CurrencySelect } from '@/components/finzen/ui/currency-select';
 
 // [UX fix, auditoría P2-2] Las filas de cuenta eran botones muertos: ahora son
 // acordeones con información REAL de la sesión y del store.
@@ -281,24 +265,12 @@ export function SettingsView() {
           <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">
             {t['settings.currency']}
           </label>
-          <Select
-            value={baseCurrency}
-            onValueChange={(v) => setBaseCurrency(v as CurrencyCode)}
-          >
-            <SelectTrigger className="h-10">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(CURRENCIES).map(([code, meta]) => (
-                <SelectItem key={code} value={code}>
-                  <span className="flex items-center gap-2">
-                    <span style={{ color: meta.color }}>{meta.symbol}</span>
-                    {code} — {meta.name}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CurrencySelect
+            value={baseCurrency as CurrencyCode}
+            onChange={(v) => setBaseCurrency(v)}
+            showName
+            className="h-10"
+          />
         </div>
       </Card>
 
@@ -341,8 +313,8 @@ export function SettingsView() {
       </Card>
 
       <Card className="p-2">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+        <ConfirmDelete
+          trigger={
             <button className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-expense-soft transition-colors text-left group" disabled={deleting}>
               <div className="w-9 h-9 rounded-lg bg-expense-soft flex items-center justify-center shrink-0">
                 <Trash2 className="w-4 h-4 text-expense" />
@@ -354,30 +326,14 @@ export function SettingsView() {
                 </div>
               </div>
             </button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {t['settings.deleteAccountTitle']}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {t['settings.deleteAccountBody']}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleting}>
-                {t['common.cancel']}
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={(e) => { e.preventDefault(); handleDeleteAccount(); }}
-                className="bg-expense text-primary-foreground hover:bg-expense/90"
-                disabled={deleting}
-              >
-                {deleting ? t['settings.deleting'] : t['settings.deleteEverything']}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          }
+          title={t['settings.deleteAccountTitle']}
+          description={t['settings.deleteAccountBody']}
+          confirmLabel={deleting ? t['settings.deleting'] : t['settings.deleteEverything']}
+          cancelLabel={t['common.cancel']}
+          onConfirm={handleDeleteAccount}
+          pending={deleting}
+        />
       </Card>
 
       {/* Logout */}

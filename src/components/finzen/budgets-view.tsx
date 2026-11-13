@@ -5,15 +5,20 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Lightbulb, Target, Plus, Pencil, Trash2 } from 'lucide-react';
 import { ApiError, useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { convertAmount, formatMoney, CURRENCIES, type CurrencyCode } from '@/lib/finzen/currency';
 import { localizedCategoryName } from '@/lib/finzen/localize';
+import { categoryColorVar } from '@/lib/finzen/category-color';
 import { toast } from 'sonner';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
+import { IconButton } from '@/components/finzen/ui/icon-button';
+import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
+import { ProgressBar } from '@/components/finzen/ui/progress-bar';
+import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
+import { CategoryIcon } from '@/components/finzen/ui/category-icon';
 
 export function BudgetsView() {
   const { budget, transactions, categories, locale, baseCurrency, addBudgetItem, updateBudgetItem, deleteBudgetItem } = useFinZenStore();
@@ -95,17 +100,26 @@ export function BudgetsView() {
       {items.length > 0 && (
         <Card className="p-5">
           <div className="flex items-center justify-between mb-2"><span className="text-sm font-medium">{t['budgets.overall']}</span><span className="text-sm tabular-nums">{formatMoney(totals.spent, baseCurrency as CurrencyCode, locale)} / {formatMoney(totals.planned, baseCurrency as CurrencyCode, locale)}</span></div>
-          <div className="h-3 rounded-full bg-surface-2 overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${Math.min(totals.pct, 100)}%`, background: totals.pct > 100 ? 'var(--expense)' : totals.pct >= 80 ? 'var(--warning)' : 'var(--income)' }} /></div>
+          <ProgressBar value={totals.pct} tone="auto" size="md" />
           <div className="text-xs text-muted-foreground mt-1.5">{totals.pct.toFixed(0)}% {t['budgets.spent']}</div>
         </Card>
       )}
       {items.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3"><Target className="w-7 h-7 text-muted-foreground" /></div>
-          <h3 className="text-lg font-semibold mb-1">{t['budgets.emptyTitle']}</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">{t['budgets.emptyHint']}</p>
-          <Button size="sm" className="h-11 min-h-11" onClick={openCreate} disabled={availableCategories.length === 0}><Plus className="w-4 h-4 mr-1" />{t['budgets.new']}</Button>
-        </Card>
+        <EmptyState
+          icon={
+            <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
+              <Target className="w-7 h-7 text-muted-foreground" />
+            </div>
+          }
+          title={t['budgets.emptyTitle']}
+          description={t['budgets.emptyHint']}
+          action={{
+            label: t['budgets.new'],
+            onClick: openCreate,
+            disabled: availableCategories.length === 0,
+            icon: <Plus className="w-4 h-4 mr-1" />,
+          }}
+        />
       ) : (
         <Card className="p-4 space-y-2">
           {items.map(item => {
@@ -113,60 +127,77 @@ export function BudgetsView() {
             return (
               <div key={item.id} className="p-3 rounded-lg border border-border hover:bg-surface-2 transition-colors">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 min-w-0"><span className="text-base shrink-0">{item.category?.icon ?? '📦'}</span><span className="text-sm font-medium truncate">{item.category ? localizedCategoryName(item.category, locale) : '—'}</span>{(isOver || isAppr) && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: isOver ? 'var(--expense-soft)' : 'var(--warning-soft)', color: isOver ? 'var(--expense)' : 'var(--warning)' }}>{isOver ? t['budgets.overBudget'] : t['budgets.approaching']}</span>}</div>
+                  <div className="flex items-center gap-2 min-w-0"><CategoryIcon category={item.category} variant="bare" /><span className="text-sm font-medium truncate">{item.category ? localizedCategoryName(item.category, locale) : '—'}</span>{(isOver || isAppr) && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: isOver ? 'var(--expense-soft)' : 'var(--warning-soft)', color: isOver ? 'var(--expense)' : 'var(--warning)' }}>{isOver ? t['budgets.overBudget'] : t['budgets.approaching']}</span>}</div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => openEdit(item.id)} className="p-2 rounded-md hover:bg-surface-2 text-muted-foreground hover:text-foreground min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label={t['a11y.edit']}><Pencil className="w-3.5 h-3.5" /></button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <button className="p-2 rounded-md hover:bg-expense-soft text-muted-foreground hover:text-expense min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label={t['a11y.delete']}><Trash2 className="w-3.5 h-3.5" /></button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>{t['budgets.deleteTitle']}</AlertDialogTitle><AlertDialogDescription>{t['budgets.deleteBody']}</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>{t['budgets.cancel']}</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(item.id)} className="bg-expense text-primary-foreground hover:bg-expense/90">{t['budgets.delete']}</AlertDialogAction></AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <IconButton
+                      icon={<Pencil className="w-3.5 h-3.5" />}
+                      label={t['a11y.edit']}
+                      onClick={() => openEdit(item.id)}
+                    />
+                    <ConfirmDelete
+                      trigger={
+                        <IconButton
+                          icon={<Trash2 className="w-3.5 h-3.5" />}
+                          label={t['a11y.delete']}
+                          variant="danger"
+                        />
+                      }
+                      title={t['budgets.deleteTitle']}
+                      description={t['budgets.deleteBody']}
+                      confirmLabel={t['budgets.delete']}
+                      cancelLabel={t['budgets.cancel']}
+                      onConfirm={() => {
+                        void handleDelete(item.id);
+                      }}
+                    />
                   </div>
                 </div>
                 <div className="flex items-center justify-between mb-1.5"><span className="text-xs tabular-nums text-muted-foreground">{formatMoney(item.spent, baseCurrency as CurrencyCode, locale)} / {formatMoney(item.planned, baseCurrency as CurrencyCode, locale)}</span><span className="text-xs tabular-nums text-muted-foreground">{item.pct.toFixed(0)}%</span></div>
-                <div className="h-2 rounded-full bg-surface-2 overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${Math.min(item.pct, 100)}%`, background: isOver ? 'var(--expense)' : isAppr ? 'var(--warning)' : item.category?.color ?? 'var(--primary)' }} /></div>
+                <ProgressBar
+                  value={item.pct}
+                  tone={
+                    isOver ? 'expense' : isAppr ? 'warning' : categoryColorVar(item.category?.color)
+                  }
+                  size="sm"
+                />
                 <div className="flex items-center justify-between mt-1.5 text-xs"><span className="text-muted-foreground">{t['budgets.alertAt']} {item.alertThresholdPct}%</span><span className="tabular-nums" style={{ color: isOver ? 'var(--expense)' : 'var(--muted-foreground)' }}>{isOver ? `${t['budgets.overBudget']} ${t['budgets.by']} ${formatMoney(Math.abs(item.remaining), baseCurrency as CurrencyCode, locale)}` : `${formatMoney(item.remaining, baseCurrency as CurrencyCode, locale)} ${t['budgets.left']}`}</span></div>
               </div>
             );
           })}
         </Card>
       )}
-      <Dialog open={dialogOpen} onOpenChange={o => { if (!o) closeDialog(); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editingItemId ? t['budgets.editItem'] : t['budgets.newItem']}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSave} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">{t['budgets.category']}</Label>
-              <Select value={categoryId} onValueChange={setCategoryId} disabled={editingItemId !== null}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  {(editingItemId ? categories.filter(c => c.direction === 'expense') : availableCategories).map(c => (
-                    <SelectItem key={c.id} value={c.id}><span className="flex items-center gap-2"><span>{c.icon}</span>{localizedCategoryName(c, locale)}</span></SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      <CrudDialog
+        open={dialogOpen}
+        onOpenChange={o => { if (!o) closeDialog(); }}
+        title={editingItemId ? t['budgets.editItem'] : t['budgets.newItem']}
+        submitLabel={editingItemId ? t['budgets.saveChanges'] : t['budgets.add']}
+        onSubmit={handleSave}
+      >
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">{t['budgets.category']}</Label>
+          <Select value={categoryId} onValueChange={setCategoryId} disabled={editingItemId !== null}>
+            <SelectTrigger className="h-11"><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              {(editingItemId ? categories.filter(c => c.direction === 'expense') : availableCategories).map(c => (
+                <SelectItem key={c.id} value={c.id}><span className="flex items-center gap-2"><span>{c.icon}</span>{localizedCategoryName(c, locale)}</span></SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">{t['budgets.amount']}</Label>
+            <div className="relative">
+              <Input type="text" inputMode="decimal" value={plannedAmount} onChange={e => setPlannedAmount(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="0.00" className="h-11 font-mono text-right pr-12" required />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{CURRENCIES[baseCurrency as CurrencyCode].symbol}</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">{t['budgets.amount']}</Label>
-                <div className="relative">
-                  <Input type="text" inputMode="decimal" value={plannedAmount} onChange={e => setPlannedAmount(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="0.00" className="h-11 font-mono text-right pr-12" required />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{CURRENCIES[baseCurrency as CurrencyCode].symbol}</span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">{t['budgets.alertPct']}</Label>
-                <Input type="number" min="1" max="100" value={alertThreshold} onChange={e => setAlertThreshold(e.target.value)} className="h-11 font-mono text-right" />
-              </div>
-            </div>
-            <Button type="submit" className="w-full h-11">{editingItemId ? t['budgets.saveChanges'] : t['budgets.add']}</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">{t['budgets.alertPct']}</Label>
+            <Input type="number" min="1" max="100" value={alertThreshold} onChange={e => setAlertThreshold(e.target.value)} className="h-11 font-mono text-right" />
+          </div>
+        </div>
+      </CrudDialog>
     </div>
   );
 }

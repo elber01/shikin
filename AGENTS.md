@@ -89,6 +89,13 @@ verificación es la barrera de calidad mínima.
 - **Solo tokens semánticos**: `bg-surface`, `text-muted-foreground`,
   `var(--income)`, `var(--expense)`, etc. PROHIBIDO `bg-white`, `text-gray-500`
   u otros colores crudos — rompen el dark mode y la identidad.
+- **Color de categoría = token (convención 10-U1):** el color de una categoría
+  se guarda como **clave** `cat-1..cat-12` (tokens `--cat-N` en
+  `globals.css`, light + dark), nunca como HEX. Para pintar, usa
+  `categoryColorVar()` / `categoryColorSoft()` de
+  `src/lib/finzen/category-color.ts`; para escribir, deja que
+  `categories-service.ts` normalice. Un HEX heredado se acepta al leer pero
+  **nunca** se inyecta en `style` o en props de gráficos.
 - **Nada de datos decorativos falsos**: deltas "+0%", sparklines inventados o
   placeholders de sesión son deuda UX. Si no hay dato real, no se muestra el
   elemento (ver `computeDelta` que devuelve `undefined` sin base de
@@ -147,6 +154,7 @@ El ESLint usa React Compiler. Los `useMemo` cuyas dependencias derivan de
 prisma/schema.prisma        # 8 modelos — fuente de verdad de datos
 src/app/api/                # rutas internas (sesión) + /api/v1 (API keys)
 src/components/finzen/      # vistas del shell + componentes de dominio
+src/components/finzen/ui/   # design system propio (stat-card, empty-state, icon-button…)
 src/components/ui/          # primitivas shadcn/ui (no editar salvo wrapper)
 src/components/auth/        # formulario de login/registro
 src/hooks/use-alerts.ts     # motor de alertas (presupuesto, spikes, forecast)

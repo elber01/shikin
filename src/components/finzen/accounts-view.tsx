@@ -5,9 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Wallet, CreditCard, Banknote, Bitcoin, Coins, PiggyBank, Plus, Building2, Pencil, Trash2 } from 'lucide-react';
 import { ApiError, useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
@@ -16,6 +14,11 @@ import { computeNetWorth, computeTotalAssets, computeTotalLiabilities } from '@/
 import { localizedPair } from '@/lib/finzen/localize';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
+import { IconButton } from '@/components/finzen/ui/icon-button';
+import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
+import { CurrencySelect } from '@/components/finzen/ui/currency-select';
+import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
 
 const SUB_TYPE_META: Record<string, { icon: typeof Wallet; label: string; labelEs: string }> = {
   checking: { icon: Wallet, label: 'Checking', labelEs: 'Cuenta corriente' },
@@ -27,6 +30,16 @@ const SUB_TYPE_META: Record<string, { icon: typeof Wallet; label: string; labelE
   loan: { icon: Building2, label: 'Loan', labelEs: 'Préstamo' },
 };
 const SUB_TYPES = Object.keys(SUB_TYPE_META);
+
+/**
+ * Fondo translúcido del icono de cuenta.
+ *
+ * `color-mix(in oklab, currentColor 8%, transparent)` y NO `${m2.color}15`:
+ * `CURRENCIES[].color` es una `var()` (p. ej. `var(--info)`) y un sufijo alpha
+ * pegado a una `var()` (`var(--info)15`) NO es CSS válido — el navegador lo
+ * descarta y el fondo nunca se pintaba. 8% ≈ el 0x15 (21/255) que se intentaba.
+ */
+const CURRENCY_ICON_BG = 'color-mix(in oklab, currentColor 8%, transparent)';
 
 export function AccountsView() {
   const { accounts, locale, baseCurrency, transactions, addAccount, updateAccount, deleteAccount } = useFinZenStore();
@@ -91,7 +104,7 @@ export function AccountsView() {
 
   function renderForm() {
     return (
-      <form onSubmit={handleSave} className="space-y-4 mt-2">
+      <>
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">{t['accounts.name']}</Label>
           <Input value={name} onChange={e => setName(e.target.value)} placeholder={t['accounts.namePlaceholder']} className="h-11" required />
@@ -119,13 +132,11 @@ export function AccountsView() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">{t['common.currency']}</Label>
-            <Select value={currency} onValueChange={v => setCurrency(v as CurrencyCode)}>
-              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(CURRENCIES).map(([code, m]) => (
-                <SelectItem key={code} value={code}><span className="flex items-center gap-2"><span style={{ color: m.color }}>{m.symbol}</span>{code}</span></SelectItem>
-              ))}</SelectContent>
-            </Select>
+            <CurrencySelect
+              value={currency}
+              onChange={setCurrency}
+              label={t['common.currency']}
+            />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -138,8 +149,7 @@ export function AccountsView() {
             <Input value={institution} onChange={e => setInstitution(e.target.value)} placeholder={t['common.optional']} className="h-11" />
           </div>
         </div>
-        <Button type="submit" className="w-full h-11">{editingId ? t['common.saveChanges'] : t['accounts.create']}</Button>
-      </form>
+      </>
     );
   }
 
@@ -149,12 +159,15 @@ export function AccountsView() {
         <h1 className="text-xl sm:text-2xl font-bold">{t['nav.accounts']}</h1>
         <Button size="sm" className="h-11 min-h-11" onClick={openCreate}><Plus className="w-4 h-4 mr-1" />{t['accounts.new']}</Button>
       </div>
-      <Dialog open={createOpen} onOpenChange={o => { if (!o) closeDialog(); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editingId ? t['accounts.edit'] : t['accounts.create']}</DialogTitle></DialogHeader>
-          {renderForm()}
-        </DialogContent>
-      </Dialog>
+      <CrudDialog
+        open={createOpen}
+        onOpenChange={o => { if (!o) closeDialog(); }}
+        title={editingId ? t['accounts.edit'] : t['accounts.create']}
+        submitLabel={editingId ? t['common.saveChanges'] : t['accounts.create']}
+        onSubmit={handleSave}
+      >
+        {renderForm()}
+      </CrudDialog>
       <Card className="p-5 bg-gradient-to-br from-surface to-surface-2">
         <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['dashboard.netWorth']}</div>
         <div className="text-3xl sm:text-4xl font-bold tabular-nums mt-1">{formatMoney(netWorth, baseCurrency as CurrencyCode, locale)}</div>
@@ -179,12 +192,20 @@ export function AccountsView() {
           </div>)}
       </Card>
       {accounts.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3"><Building2 className="w-7 h-7 text-muted-foreground" /></div>
-          <h3 className="text-lg font-semibold mb-1">{t['accounts.emptyTitle']}</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">{t['accounts.emptyHint']}</p>
-          <Button onClick={openCreate} size="sm" className="h-11 min-h-11"><Plus className="w-4 h-4 mr-1" />{t['accounts.create']}</Button>
-        </Card>
+        <EmptyState
+          icon={
+            <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
+              <Building2 className="w-7 h-7 text-muted-foreground" />
+            </div>
+          }
+          title={t['accounts.emptyTitle']}
+          description={t['accounts.emptyHint']}
+          action={{
+            label: t['accounts.create'],
+            onClick: openCreate,
+            icon: <Plus className="w-4 h-4 mr-1" />,
+          }}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {accounts.map(a => {
@@ -198,20 +219,36 @@ export function AccountsView() {
               <Card key={a.id} className="p-4 hover:border-primary/30 transition-colors">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${m2.color}15`, color: m2.color }}><Ic className="w-5 h-5" /></div>
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: CURRENCY_ICON_BG, color: m2.color }}><Ic className="w-5 h-5" /></div>
                     <div><div className="text-sm font-semibold">{a.name}</div><div className="text-xs text-muted-foreground">{localizedPair(meta.labelEs, meta.label, locale)}{a.lastFour && ` · •••• ${a.lastFour}`}</div></div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => openEdit(a.id)} className="p-2 rounded-md hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label={t['a11y.edit']}><Pencil className="w-4 h-4" /></button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <button className="p-2 rounded-md hover:bg-expense-soft text-muted-foreground hover:text-expense transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label={t['a11y.delete']}><Trash2 className="w-4 h-4" /></button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>{t['accounts.deleteTitle']}</AlertDialogTitle><AlertDialogDescription>{linkedTx > 0 ? t['accounts.deleteWithTx'].replace('{n}', String(linkedTx)) : t['accounts.deleteConfirm'].replace('{name}', a.name)}</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>{t['common.cancel']}</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(a.id)} disabled={linkedTx > 0} className="bg-expense text-primary-foreground hover:bg-expense/90">{t['common.delete']}</AlertDialogAction></AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <IconButton
+                      icon={<Pencil className="w-4 h-4" />}
+                      label={t['a11y.edit']}
+                      onClick={() => openEdit(a.id)}
+                    />
+                    <ConfirmDelete
+                      trigger={
+                        <IconButton
+                          icon={<Trash2 className="w-4 h-4" />}
+                          label={t['a11y.delete']}
+                          variant="danger"
+                        />
+                      }
+                      title={t['accounts.deleteTitle']}
+                      description={
+                        linkedTx > 0
+                          ? t['accounts.deleteWithTx'].replace('{n}', String(linkedTx))
+                          : t['accounts.deleteConfirm'].replace('{name}', a.name)
+                      }
+                      confirmLabel={t['common.delete']}
+                      cancelLabel={t['common.cancel']}
+                      onConfirm={() => {
+                        void handleDelete(a.id);
+                      }}
+                      disabled={linkedTx > 0}
+                    />
                   </div>
                 </div>
                 <div className="flex items-end justify-between">

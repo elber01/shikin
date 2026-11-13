@@ -50,6 +50,20 @@
   --color-btc: var(--btc);
   --color-usdt: var(--usdt);
   --color-primary-hover: var(--primary-hover);
+  /* Categorías — tokens de dato (convención 10-U1). La clave `cat-N` es lo que
+     se guarda en BD; el color real lo resuelve el tema light/dark. */
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  --color-cat-6: var(--cat-6);
+  --color-cat-7: var(--cat-7);
+  --color-cat-8: var(--cat-8);
+  --color-cat-9: var(--cat-9);
+  --color-cat-10: var(--cat-10);
+  --color-cat-11: var(--cat-11);
+  --color-cat-12: var(--cat-12);
   --shadow-card: 0 1px 2px rgba(0, 39, 74, 0.06), 0 4px 12px rgba(0, 39, 74, 0.08);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -103,6 +117,20 @@
   --info: oklch(0.6 0.2 250);
   --btc: oklch(0.7 0.18 55);                 /* #F7931A */
   --usdt: oklch(0.65 0.14 165);              /* #26A17B */
+  /* Category color tokens — Light (10-U1). Anclas HEX en
+     src/lib/finzen/category-color.ts (CATEGORY_COLOR_HEX). */
+  --cat-1: oklch(0.62 0.17 155);             /* #059669 emerald-600 */
+  --cat-2: oklch(0.60 0.12 180);             /* #14B8A6 teal-500 */
+  --cat-3: oklch(0.68 0.17 145);             /* #22C55E green-500 */
+  --cat-4: oklch(0.40 0.09 250);             /* #1E3A5F navy */
+  --cat-5: oklch(0.72 0.17 70);              /* #F59E0B amber-500 */
+  --cat-6: oklch(0.58 0.19 255);             /* #3B82F6 blue-500 */
+  --cat-7: oklch(0.58 0.22 300);             /* #A855F7 purple-500 */
+  --cat-8: oklch(0.62 0.22 25);              /* #EF4444 red-500 */
+  --cat-9: oklch(0.63 0.22 350);             /* #EC4899 pink-500 */
+  --cat-10: oklch(0.66 0.19 40);             /* #F97316 orange-500 */
+  --cat-11: oklch(0.74 0.16 55);             /* #F7931A bitcoin orange */
+  --cat-12: oklch(0.60 0.02 250);            /* #6B7280 gray-500 */
 }
 
 .dark {
@@ -150,6 +178,20 @@
   --info: oklch(0.75 0.15 250);
   --btc: oklch(0.7 0.18 55);
   --usdt: oklch(0.7 0.14 165);
+  /* Category color tokens — Dark (10-U1). Mismo catálogo, versión legible
+     sobre superficie oscura. */
+  --cat-1: oklch(0.78 0.16 155);
+  --cat-2: oklch(0.76 0.11 180);
+  --cat-3: oklch(0.80 0.16 145);
+  --cat-4: oklch(0.75 0.13 250);
+  --cat-5: oklch(0.78 0.18 70);
+  --cat-6: oklch(0.72 0.16 255);
+  --cat-7: oklch(0.72 0.19 300);
+  --cat-8: oklch(0.75 0.20 25);
+  --cat-9: oklch(0.74 0.19 350);
+  --cat-10: oklch(0.76 0.17 40);
+  --cat-11: oklch(0.80 0.15 55);
+  --cat-12: oklch(0.70 0.02 250);
 }
 
 @layer base {

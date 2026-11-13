@@ -32,6 +32,11 @@ import {
   exportTransactionsJson,
 } from '@/lib/finzen/export';
 import { intlLocale, localizedCategoryName } from '@/lib/finzen/localize';
+import { categoryColorVar } from '@/lib/finzen/category-color';
+import { StatCard } from '@/components/finzen/ui/stat-card';
+import { StatGrid } from '@/components/finzen/ui/stat-grid';
+import { EmptyState } from '@/components/finzen/ui/empty-state';
+import { ProgressBar } from '@/components/finzen/ui/progress-bar';
 
 type Range = '6m' | '1y' | 'all';
 
@@ -110,7 +115,7 @@ export function ReportsView() {
         return {
           name: cat ? localizedCategoryName(cat, locale) : t['common.other'],
           icon: cat?.icon ?? '📦',
-          color: cat?.color ?? 'var(--muted-foreground)',
+          color: categoryColorVar(cat?.color),
           amount,
           pct: totals.expenses > 0 ? (amount / totals.expenses) * 100 : 0,
         };
@@ -154,19 +159,21 @@ export function ReportsView() {
     return (
       <div className="space-y-4">
         <h1 className="text-xl sm:text-2xl font-bold">{t['reports.title']}</h1>
-        <Card className="p-8 text-center shadow-card">
-          <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
-            <BarChart3 className="w-7 h-7 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-semibold mb-1">{t['reports.emptyTitle']}</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
-            {t['reports.emptyHint']}
-          </p>
-          <Button size="sm" className="h-11 min-h-11" onClick={() => setAddSheetOpen(true)}>
-            <Plus className="w-4 h-4 mr-1" />
-            {t['reports.emptyCta']}
-          </Button>
-        </Card>
+        <EmptyState
+          className="shadow-card"
+          icon={
+            <div className="w-14 h-14 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3">
+              <BarChart3 className="w-7 h-7 text-muted-foreground" />
+            </div>
+          }
+          title={t['reports.emptyTitle']}
+          description={t['reports.emptyHint']}
+          action={{
+            label: t['reports.emptyCta'],
+            onClick: () => setAddSheetOpen(true),
+            icon: <Plus className="w-4 h-4 mr-1" />,
+          }}
+        />
       </div>
     );
   }
@@ -209,27 +216,30 @@ export function ReportsView() {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 *:min-w-0">
-        <Card className="p-4">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['reports.totalIncome']}</div>
-          <div className="text-xl sm:text-2xl font-bold tabular-nums text-income break-words mt-1">
-            {formatMoney(totals.income, baseCurrency as CurrencyCode, locale)}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['reports.totalExpenses']}</div>
-          <div className="text-xl sm:text-2xl font-bold tabular-nums text-expense break-words mt-1">
-            {formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">{t['reports.netSavings']}</div>
-          <div className={`text-xl sm:text-2xl font-bold tabular-nums break-words mt-1${totals.savings < 0 ? ' text-expense' : ''}`}>
-            {formatMoney(totals.savings, baseCurrency as CurrencyCode, locale)}
-          </div>
-          <div className="text-xs text-muted-foreground">{totals.ratio.toFixed(1)}%</div>
-        </Card>
-      </div>
+      <StatGrid scale="md">
+        <StatCard
+          label={t['reports.totalIncome']}
+          value={formatMoney(totals.income, baseCurrency as CurrencyCode, locale)}
+          tone="income"
+          labelClassName="uppercase tracking-wide"
+          valueClassName="mt-1"
+        />
+        <StatCard
+          label={t['reports.totalExpenses']}
+          value={formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)}
+          tone="expense"
+          labelClassName="uppercase tracking-wide"
+          valueClassName="mt-1"
+        />
+        <StatCard
+          label={t['reports.netSavings']}
+          value={formatMoney(totals.savings, baseCurrency as CurrencyCode, locale)}
+          tone={totals.savings < 0 ? 'expense' : 'default'}
+          labelClassName="uppercase tracking-wide"
+          valueClassName="mt-1"
+          hint={`${totals.ratio.toFixed(1)}%`}
+        />
+      </StatGrid>
 
       {/* Income vs Expenses chart */}
       <Card className="p-5">
@@ -303,12 +313,7 @@ export function ReportsView() {
                   {formatMoney(cat.amount, baseCurrency as CurrencyCode, locale)} · {cat.pct.toFixed(0)}%
                 </span>
               </div>
-              <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${cat.pct}%`, background: cat.color }}
-                />
-              </div>
+              <ProgressBar value={cat.pct} tone={cat.color} animated={false} />
             </div>
           ))}
         </div>

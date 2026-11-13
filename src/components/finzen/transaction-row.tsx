@@ -5,6 +5,7 @@ import { useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { formatMoney, formatRelativeDate, type CurrencyCode } from '@/lib/finzen/currency';
 import { localizedCategoryName } from '@/lib/finzen/localize';
+import { categoryColorSoft, categoryColorVar } from '@/lib/finzen/category-color';
 import type { Transaction } from '@/store/finzen-store';
 
 interface TransactionRowProps {
@@ -45,8 +46,8 @@ export function TransactionRow({ tx, onEdit }: TransactionRowProps) {
       <div
         className="w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0"
         style={{
-          background: category ? `${category.color}20` : 'var(--surface-2)',
-          color: category?.color ?? 'var(--muted-foreground)',
+          background: category ? categoryColorSoft(category.color) : 'var(--surface-2)',
+          color: category ? categoryColorVar(category.color) : 'var(--muted-foreground)',
         }}
       >
         {category?.icon ?? (isTransfer ? '🔄' : '💰')}

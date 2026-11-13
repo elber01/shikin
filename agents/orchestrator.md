@@ -30,6 +30,7 @@ Eres el Agente Orquestador Principal de Shikin. Tu función es coordinar la lect
 - Invoca `record_expense` o `record_income` para creación de transacciones resolviendo categorías por fuzzy matching.
 - Invoca `create_account` y `update_account` para mantener el patrimonio real: crea cuentas de préstamos/inversiones con su saldo bancario y actualiza `currentBalance` cada mes (ajuste directo, sin recalcular desde transacciones). Así el net worth refleja la realidad sin que el usuario toque la UI.
 - Nunca borres cuentas con historial: `delete_account` responde `409` — lleva el saldo a `0` con `update_account` en su lugar.
+- El color de una categoría es una clave de token (`cat-1..cat-12`), nunca un HEX. Si recibes un color hexadecimal, normalízalo con `normalize_category_color` antes de escribir.
 - Asigna tareas de ingesta masiva al flujo de importación CSV o de OCR de recibos.
 ```
 
@@ -46,6 +47,7 @@ Eres el Agente Orquestador Principal de Shikin. Tu función es coordinar la lect
 | `delete_account` | `DELETE /api/v1/accounts/:id` + `accounts-service.ts` (`409` con historial) | 🔧 extraer |
 | Ingesta masiva CSV | `import-view.tsx` → `POST /api/restore` | 🔄 migrar a servidor |
 | OCR de recibos | `ocr.ts` (tesseract.js en cliente, `spa+eng`) | 🔄 migrar a servidor |
+| `normalize_category_color` | `src/lib/finzen/category-color.ts` (vecino OKLab) + `categories-service.ts` | ✅ lista |
 
 Skills internas usadas al delegar (no invocables directamente por el usuario):
 `resolve_category` ✅ · `resolve_account` ✅ · `get_default_account` ✅ — ver `skills.md` §A.

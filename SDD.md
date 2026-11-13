@@ -41,6 +41,7 @@
   - Cuentas: `accountType` `asset`|`liability` (default `asset`); `subType` `checking|savings|credit_card|cash|crypto_wallet|investment|loan` (default `checking`, alias `credit`→`credit_card`); `currentBalance` número finito (default `0`; pasivo se almacena positivo = deuda).
   - Toda la lógica de cuentas vive en `src/lib/services/accounts-service.ts` (primer servicio de la capa de la Fase 1); las rutas v1 y la interna `/api/accounts` son adaptadores delgados que comparten el servicio y su guard de integridad.
   - `category` texto libre con fuzzy-match (`name`/`nameEs`) y **autocreación** (`src/lib/finzen/v1-helpers.ts`).
+  - El **color de categoría no es parte del contrato v1**: las rutas v1 no aceptan `color` y la autocreación deja `color = null` → la vista resuelve el token de fallback (`cat-12`). Si en el futuro v1 llegara a aceptar color, solo admite claves `cat-N` (nunca HEX).
   - Cuenta con prioridad `account_id` > `accountId` > `account` > default; si el usuario especificó una y no existe → `422 account_not_found` (sin fallback silencioso).
   - `date` ISO (default hoy); `importSource: 'api_v1'`; `tags: 'api_v1'`.
 - **Deuda del contrato:** las rutas legacy `/api/agent/*` duplican capacidades sin rate limit y con otro shape de error (`{ error }`). Se deprecan en la Fase 0 del roadmap (§6).
@@ -77,7 +78,7 @@
 | `User` | Dueño de todos los datos | `email` unique, `passwordHash`, `preferredLang`, `baseCurrency`, `theme` |
 | `Session` | NextAuth | `sessionToken` unique (producción usa JWT; el modelo queda por compatibilidad) |
 | `Account` | Cuentas reales y virtuales | `accountType` asset\|liability\|equity\|income\|expense · `subType` · `currency` · `currentBalance` |
-| `Category` | Clasificación | `name`/`nameEs`/`nameEn`, `direction` income\|expense\|transfer, `isSystem`, `sortOrder`, `userId` nullable (globales del sistema) |
+| `Category` | Clasificación | `name`/`nameEs`/`nameEn`, `direction` income\|expense\|transfer, `isSystem`, `sortOrder`, `userId` nullable (globales del sistema), `color` = **clave de token** `cat-1..cat-12` (nunca HEX — el CSS se resuelve en la vista) |
 | `Transaction` | Asiento double-entry | `type` income\|expense\|transfer\|adjustment · `fromAccountId`/`toAccountId` (reales o `x_<categoryId>`) · `categoryId` (SetNull) · `tags` (string CSV) · `importSource` |
 | `Budget` / `BudgetItem` | Presupuestos | `period`, `plannedAmount`, `alertThresholdPct` (default 80) |
 | `ApiKey` | Integración IA | `keyHash` unique SHA-256 · `keyPrefix` · `permissions` (CSV) · `lastUsedAt` · `expiresAt` · `isActive` |
@@ -94,6 +95,7 @@
 4. Seguridad: keys solo hasheadas; jamás loguear la clave cruda; secrets fuera del código; `.env` gitignored.
 5. React Compiler: disables puntuales SOLO para `react-hooks/preserve-manual-memoization` cuando las deps derivan de `new Date()`.
 6. Verificación obligatoria al cerrar cualquier tarea: `bun run lint && bun run typecheck && bun run build`.
+7. **Color de datos = token (convención 10-U1):** las categorías se colorean con los tokens `--cat-1..--cat-12` (light + dark en `src/app/globals.css`). `Category.color` guarda la **clave** (`cat-7`), nunca un HEX; un valor desconocido o heredado se normaliza al fallback `cat-12` con el vecino más cercano en OKLab. Prohibido inyectar HEX en `style` o en props de gráficos. La lógica de normalización vive en `src/lib/finzen/category-color.ts` y se aplica en el servicio de categorías (`src/lib/services/categories-service.ts`); la migración de datos existentes es un script aparte, idempotente y con rollback (`scripts/migrate-category-colors.ts`).
 
 ## 6. Roadmap de Migración (SDD → Servicios → MCP → Multiagentes)
 

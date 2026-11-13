@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 12-nov-2026 (10-U0 — Fase U0 del programa de mejora UI/UX + agentes in-app: higiene visual (i18n completo, a11y, targets 44px, export unificado, rango↔gráfico de Reportes) + fix del bug que perdía las partidas de presupuesto al recargar; multi-tenant + endpoint OpenAI-compatible decididos para la futura consola de agentes)
+**Última actualización:** 13-nov-2026 (10-U1 — design system propio (`src/components/finzen/ui/`), color de categoría como token semántico (`cat-1..cat-12`, con script de migración pendiente de ejecutar en prod), i18n con tipo derivado (402 claves), limpieza de 34 ficheros + 35 deps, y `bun run verify` Repair: el script `build` era rojo en Windows por `cp -r` → ahora portable con `scripts/copy-standalone.mjs`)
 
 ---
 
@@ -52,6 +52,7 @@
 | **8.6 — Fix responsivo Transacciones** | Desbordamiento de ingresos/gastos en móvil: totals a 1 col + fuente por breakpoint (patrón reports-view), `truncate` en nombre de cuenta, `w-full` en selects del sheet + padding del form. Fix huérfano previo adoptado y cerrado. Revisor APRUEBA · verify ✓ | 27-oct-2026 |
 | **8.7 — Responsive total de stats (todas las resoluciones)** | El dueño reportó que la adaptación solo se veía en móvil: el patrón `sm:grid-cols-3` + fuente grande desbordaba a 640-1023px en Transacciones y (peor, text-2xl) en Reports/Dashboard. Alcance sistémico aprobado: transactions `md:grid-cols-3` + escalera `text-base sm:text-lg md:text-xl`; reports/dashboard `lg:grid-cols-3` + `*:min-w-0` + `break-words` en montos; KpiCard `break-words`. Convención nueva documentada en AGENTS.md §5. Revisor APRUEBA · verify ✓ (node). Commit `421251e` + docs **sin push** — GCM headless no puede re-autenticar (lección §6) | 27-oct-2026 |
 | **10-U0 — U0: higiene UI + bug de presupuestos** | Primera fase del programa "mejora UI/UX + agentes dentro de la app" (plan de 5 fases UI U0→U4 + bloque de agentes). Entrega: i18n completo (0 `locale === 'es' ?` en las vistas, 390 claves con paridad es/en), a11y (aria-labels i18n, `<div onClick>`→`<button>`, CTAs ≥44px), export CSV/JSON unificado en 4 sitios con fidelidad de respaldo, botón "Exportar" de Reportes revivido, rango↔gráfico↔totales alineados (`computeMonthlyFlows` como única fuente), drag & drop real en Importar con copy honesto (solo CSV), y **fix del bug real** `addBudgetItem` (no persistía: id `temp_…` en local → se perdía al recargar) con `POST /api/budgets/[budgetId]/items` + `src/lib/services/budgets-service.ts`. Revisor APRUEBA, 0 bloqueantes · harness 3/3 ✓ (node) | 12-nov-2026 |
+| **10-U1 — U1: design system + tokens de categoría + i18n derivado + limpieza** | Segunda fase. (B1) `Category.color` pasa de HEX crudo en BD a **clave de token** `cat-1..cat-12` (tokens `--cat-N` light+dark, módulo puro `category-color.ts` con vecino más cercano en OKLab, servicio `categories-service.ts`, seed y picker migrados, script `scripts/migrate-category-colors.ts` con dry-run/apply/rollback). (B2) design system propio en `src/components/finzen/ui/` (stat-card, stat-grid, empty-state, confirm-delete, icon-button, progress-bar, currency-select, crud-dialog, category-icon + `STAT_SCALE` como fuente única de la escala responsive). (B3) i18n: `TranslationKey` **derivado** del diccionario `es` (paridad es/en garantizada por `tsc`). (B4) borrados 34 ficheros (30 primitivas shadcn sin uso + `use-toast`/`use-mobile`/`mock-data`/`tailwind.config.ts`) y 35 deps; `bun.lock` con 344 eliminaciones y 0 añadidos (salvo el hoists de `uuid@8.3.2` con sha512 idéntico). **Fix del harness**: `bun run verify` era rojo en Windows (`cp -r` en el script `build`) → `scripts/copy-standalone.mjs` portable. Revisor APRUEBA, 0 bloqueantes · `bun run verify` exit 0 | 13-nov-2026 |
 
 ## 3. Decisiones de arquitectura y su porqué
 
@@ -74,13 +75,26 @@
 | **Flujo multiagente coordinador→planificador→implementador→revisor** | El coordinador orquesta y es el único que cierra (harness + memoria); roles materializados como agentes de opencode con permisos (planificador/revisor read-only) | `.opencode/agent/`, `agent.md` §4 |
 | **Consola de agentes: multiusuario y endpoint OpenAI-compatible** (decidido por el dueño 12-nov-2026, **no implementado todavía**) | La clave del proveedor LLM será **por usuario** (cifrada en reposo, con cuotas) → aísla a cada usuario y permite revocar por separado, a costa de duplicar el alcance de la fase de agentes. El cliente será un **endpoint compatible con OpenAI** (`LLM_BASE_URL` configurable) → una sola implementación de streaming + tool-calls cubre Anthropic vía gateway, OpenAI, Groq y modelos locales, sin acoplar el código a un vendor y **sin dependencias nuevas** (`fetch` nativo + `zod` ya instalado) | `MEMORY.md` §4 (sesión 12-nov-2026), `worklog.md` PHASE 10 |
 
-## 4. Estado actual (12-nov-2026)
+## 4. Estado actual (13-nov-2026)
 
-**Barreras de calidad:** verify (lint+typecheck+build) ✓ — corrido vía node, ver nota 8.6 (`bun` ausente en el sandbox actual) · harness 3/3 exit 0 en la fase 10-U0 (ejecutado de forma independiente por implementador, revisor y coordinador) · E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓.
+**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + build + copia portable a standalone. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd` (instalado con `npm install --no-save --no-package-lock bun`; `package.json` y lockfiles intactos salvo las purgas aprobadas). E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`).
 
-**⚠️ PUSH PENDIENTE (desde 8.6) RESUELTO 27-oct-2026:** los commits `548c233` (8.6), `421251e` (8.7) y `8f573e3` (docs cierre) fueron empujados a `main` y desplegados a Vercel (`shikin-elber01s-projects.vercel.app`). Smoke rápido: `/login` 200, branding Shikin presente. El aviso sobre GCM headless queda como lección para futuras sesiones.
+**⚠️ PENDIENTE DE DECISIÓN DEL DUEÑO — migración de colores en producción:** la app ya resuelve colores por token en runtime (tolera HEX heredado), pero la BD de Turso conserva los HEX antiguos. Para alinearla: `bun scripts/migrate-category-colors.ts --dry-run --allow-production` (ver) → `--apply --allow-production` (escribe, con backup) → `--rollback <backup>` (deshace). **El gate `--allow-production` es obligatorio para cualquier modo contra `libsql:`** (incluido dry-run). No ejecutar contra producción sin su visto bueno (riesgo de datos).
 
-**⚠️ SIN COMMIT (desde 12-nov-2026):** la fase 10-U0 está implementada, revisada y verificada en el working tree, **sin commit ni push** (no se hace commit sin petición explícita del dueño).
+**⚠️ SIN COMMIT (desde 12-nov-2026):** la fase 10-U1 está implementada, revisada y verificada en el working tree, **sin commit ni push** (10-U0 sí está commiteado y desplegado: `7a53c1f`).
+
+Sesión 13-nov-2026 (10-U1 — design system + tokens de categoría + i18n derivado + limpieza; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
+- **Alcance:** 4 bloques. B1 (color de categoría como token), B2 (design system propio en `src/components/finzen/ui/`), B3 (i18n con tipo derivado), B4 (limpieza de 34 ficheros + 35 deps). Cierra las deudas #13, #14 y #15.
+- **Spec primero (coordinador, antes del código):** `SDD.md` §2 (el color **no** es parte del contrato v1 → la autocreación deja `color = null` → fallback `cat-12`), §4 (`Category.color` = clave `cat-1..cat-12`, nunca HEX), §5 convención 7; `skills.md` §3 (`resolve_category` + skill nueva `normalize_category_color`); `agents/orchestrator.md` (tabla de delegación + directiva); `AGENTS.md` §5 (color de categoría = token) y §6 (mapa con `finzen/ui/`).
+- **B1:** tokens `--cat-1..--cat-12` (light+dark) en `globals.css`; módulo puro `src/lib/finzen/category-color.ts` (vecino más cercano en OKLab: sRGB→lineal→OKLab, ΔE euclídeo, empate → índice menor; la salida **nunca** emite HEX → `var(--cat-N)`); servicio `src/lib/services/categories-service.ts` (ownership, categorías de sistema no borrables, 409 `category_has_transactions` / `category_in_budget`); rutas `/api/categories` convertidas en adaptadores delgados; seed y picker migrados; script `scripts/migrate-category-colors.ts` (dry-run por defecto, `--apply`, `--rollback`, backup, idempotencia, lotes de 100, gate `--allow-production`).
+  - **Conflicto de spec resuelto:** el plan fijaba `#10B981` → `cat-1` por decisión de producto, pero el vecino OKLab puro da `cat-2` (ΔE 0.0547 vs 0.1025). Solución: `LEGACY_CATEGORY_COLOR_ALIASES` se consulta **antes** del vecino, y `nearestCategoryColorKey` queda **puro** (las 12 anclas mapean a sí mismas). El alias aplica en el servicio y en la migración.
+- **B2:** 10 ficheros nuevos en `src/components/finzen/ui/`. `STAT_SCALE` (`stat-scale.ts`) es la **fuente única** del techo de fuente y del breakpoint del grid → hace imposible que divergan (que era exactamente el bug que causó la fase 8.7). `IconButton` normaliza el target ≥40px + `aria-label`; `ConfirmDelete` envuelve `AlertDialog` con `bg-expense text-primary-foreground`; `ProgressBar` con `role="progressbar"`; `CrudDialog` en modo asistente (sin `<form>`) para los 3 wizards, para no alterar su flujo.
+- **B3:** `TranslationKey` pasa a ser `keyof typeof es` con `en: Record<TranslationKey,string>` → **el compilador** ahora garantiza la paridad es/en (una clave faltante en `en` rompe el typecheck). 0 cambios en los ~390 call-sites `t['clave']`.
+- **B4:** 30 primitivas shadcn sin uso + `use-toast.ts` + `use-mobile.ts` + `mock-data.ts` + `tailwind.config.ts` (config legacy de Tailwind 3 que no se aplicaba → era una trampa) borrados; 35 deps purgadas con `bun remove`. **`bun.lock`: 344 eliminaciones, 0 añadidos**, salvo el hoists de `uuid@8.3.2` (mismo sha512 que el `next-auth/uuid` anidado previo). `tailwindcss-animate` también purgado (muerto tras borrar `tailwind.config.ts`; las utilidades `animate-*` vienen de `tw-animate-css`).
+- **Fix del harness (hallazgo del implementador):** `bun run verify` era **ROJO** en Windows — el script `build` terminaba con `cp -r` (Unix) → `cp: illegal option -- r`. Preexistente, pero bloqueaba la barrera canónica. Resuelto con `scripts/copy-standalone.mjs` (ESM, `fs.cpSync` recursivo, mensaje claro si falta `.next/standalone`) y `package.json` → `"build": "next build && node scripts/copy-standalone.mjs"` + `vercel-build` equivalente (generate → build → copia).
+- **Bugs de CSS inválido arreglados (2):** `` `${iconColor}20` `` en `dashboard-view.tsx` y `` `${m2.color}15` `` en `accounts-view.tsx` generaban `var(--expense)20` / `var(--info)15` → **no es CSS válido**, el fondo nunca se pintaba. Ahora `color-mix(in oklab, currentColor 12%/8%, transparent)`.
+- **3 avisos del revisor resueltos antes de cerrar:** (A1) `PATCH /api/categories/[id]` **sin** `color` reseteaba la categoría a `cat-12` (regresión vs HEAD) → ahora "ausente" = preserva, `null` explícito = reset al fallback; (A5) el gate `--allow-production` solo cubría `--apply` → ahora cubre dry-run/apply/rollback y corta **antes** de conectar; (A6) los swatches de color sin `aria-label`/`aria-pressed` y con target 32px → ahora con `aria-label` i18n (12 claves nuevas, 390→402), `aria-pressed` y target ≥40px.
+- **Verificación:** `bun run verify` exit 0 (implementador, revisor y coordinador). Revisor: **APRUEBA**, 0 bloqueantes, con recálculo independiente de la matemática OKLab (las 12 anclas mapean a sí mismas; `#059669`→`cat-1`, `#F59E0B`→`cat-5`, `#6B7280`→`cat-12`, basura→`cat-12`) y verificación del sha512 de `uuid`. Intactos: `prisma/schema.prisma`, `src/lib/auth/**`, `src/lib/db.ts`, **todo** `/api/v1/**`, `finance.ts` y `finzen-store.ts` → doble entrada, net worth y contrato v1 sin tocar. 0 `as any` nuevos. La migración **no** se ejecutó contra Turso.
 
 Sesión 12-nov-2026 (10-U0 — primera fase del programa UI/UX + agentes in-app; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
 - **Origen:** el dueño preguntó (A) cuánto se puede mejorar la UI "en todo" y (B) si puede manejar sus agentes externos dentro de la app sin depender de una plataforma aparte. El coordinador respondió con un diagnóstico grounded (inventario read-only del repo) + un programa de fases, no con un parche.
@@ -396,26 +410,33 @@ pendiente de repoint (§5).
     `scripts/generate-brand-assets.js` tiene `DEFAULT_SRC` absoluto a
     `~/Downloads` (override `--src` existe; en clonación fresca convendría
     exigir `--src`).
-13. **Residuo de plantilla (detectado en 10-U0, sin resolver):** 32 de las 48
-    primitivas de `src/components/ui/` **no se usan** (`sidebar` 726 líneas,
-    `menubar`, `carousel`, `command`, `drawer`, `resizable`, `calendar`,
-    `breadcrumb`, `table`, `form`, `chart`…) y ~12 dependencias están
-    instaladas sin usar (`@tanstack/react-query`, `@tanstack/react-table`,
-    `@mdxeditor/editor`, `@dnd-kit/*`, `@reactuses/core`, `next-intl`,
-    `z-ai-web-dev-sdk`, `uuid`, `react-syntax-highlighter`,
-    `react-resizable-panels`). -> **Fase U1** (borrado + limpieza de
-    `package.json`). Ojo: `cmdk`, `zod` y `sonner` **sí** se usan o se van a
-    usar — no borrar.
-14. **`Category.color` guarda HEX en BD** (`prisma/seed.ts`,
-    `src/lib/finzen/default-categories.ts`) y se inyecta tal cual en los
-    gráficos (`dashboard-view.tsx`, `reports-view.tsx`) → los colores de datos
-    no respetan dark mode. Son **datos**, no color de tema. -> **Fase U1**:
-    tokens `--cat-1..12` + migración aditiva (mapa HEX→clave) + normalización
-    al escribir; el picker libre de color queda como deuda.
-15. **`TranslationKey` es un union type manual** (~390 claves × 3 sitios:
-    union + `es` + `en`). Cualquier clave nueva obliga a 3 ediciones. ->
-    **Fase U1**: derivar `TranslationKey` de `keyof typeof translations.es`
-    con `en` tipado `Record<TranslationKey, string>`.
+13. ~~**Residuo de plantilla (detectado en 10-U0, sin resolver):**~~ **RESUELTO
+    (10-U1, 13-nov-2026):** borrados 30 primitivas shadcn sin uso +
+    `src/hooks/use-toast.ts` + `src/hooks/use-mobile.ts` +
+    `src/lib/finzen/mock-data.ts` + `tailwind.config.ts` (config legacy de
+    Tailwind 3 que no se aplicaba → trampa para futuras sesiones) y **35
+    deps** purgadas con `bun remove` (`bun.lock`: 344 eliminaciones, 0
+    añadidos salvo el hoists de `uuid@8.3.2` con sha512 idéntico al
+    `next-auth/uuid` anidado previo). `tailwindcss-animate` también purgado
+    (muerto tras borrar `tailwind.config.ts`; las utilidades `animate-*`
+    vienen de `tw-animate-css`). Se conservan `cmdk` (U2), `zod` (bloque de
+    agentes) y `sonner`.
+14. ~~**`Category.color` guarda HEX en BD**~~ **RESUELTO (10-U1,
+    13-nov-2026):** `Category.color` ahora guarda la **clave** `cat-1..cat-12`
+    (tokens `--cat-N` light+dark). Módulo puro `category-color.ts` (vecino
+    más cercano en OKLab, con alias explícito `#10B981`→`cat-1` por decisión
+    de producto), servicio `categories-service.ts`, seed y picker migrados, y
+    el render **nunca** emite HEX (tolerante a HEX heredado → se puede
+    desplegar antes de migrar los datos).
+    **PENDIENTE (decisión del dueño):** ejecutar la migración en Turso —
+    `bun scripts/migrate-category-colors.ts --dry-run --allow-production`
+    → `--apply --allow-production` → `--rollback <backup>`. Sin ejecutar, la
+    BD de prod conserva HEX (funcional, pero fuera de la convención).
+15. ~~**`TranslationKey` es un union type manual**~~ **RESUELTO (10-U1,
+    13-nov-2026):** `TranslationKey` es `keyof typeof es` y `en` está tipado
+    `Record<TranslationKey, string>` → **el compilador** garantiza la paridad
+    es/en (una clave faltante en `en` rompe el typecheck). 402 claves, 0
+    cambios en los call-sites `t['clave']`.
 16. **`text-white` en la variante `destructive`** de `src/components/ui/button.tsx`
     y `ui/badge.tsx`. `AGENTS.md` §7 prohíbe tocar primitivas salvo
     integración → decisión del dueño pendiente (wrapper o excepción
@@ -437,6 +458,21 @@ pendiente de repoint (§5).
     (entrada retroactiva añadida en la fase 10-U0). Lección: un mensaje de
     commit que promete "memoria y worklog" no es evidencia — auditar que
     AMBOS archivos cambiaron.
+21. **Deltas visuales aceptados en 10-U1 (revisor, no bloqueantes):** los CTA
+    de los empty states pasaron de `h-9 px-4` a `h-11 min-h-11` (36→44px, HIG)
+    y el `IconButton` de "copiar" hereda `text-muted-foreground`. El bucket
+    "sin categoría" pasó de `var(--muted-foreground)` a `var(--cat-12)`
+    (alineado con la convención 10-U1). Aceptados por el coordinador; no
+    son deuda.
+22. **El harness canónico exige `bun`:** `bun run verify` es la barrera
+    oficial, pero el sandbox no traía bun. Resuelto instalándolo **dentro de
+    `node_modules`** (`npm install --no-save --no-package-lock bun` → v1.4.4) →
+    `.\node_modules\.bin\bun.cmd run verify`. `package.json` y los lockfiles
+    quedan intactos (salvo purgas aprobadas) y no se crea `package-lock.json`.
+23. **`bun.lock` tiene una línea añadida respecto a HEAD:** `uuid@8.3.2`
+    (hoisted) sustituye a `uuid@11.1.0` (directa) tras la purga de 10-U1 —
+    mismo sha512 que el `next-auth/uuid` anidado previo, integridad verificada.
+    No es una regresión, pero conviene saberlo al comparar lockfiles.
 
 ## 6. Lecciones aprendidas (para no repetir errores)
 
@@ -475,6 +511,17 @@ pendiente de repoint (§5).
   implementación, o el implementador "arregla" código correcto. Lo mismo
   con el mensaje de un commit: `8f573e3` decía "memoria y worklog" y solo
   actualizó 2 de los 3 archivos → auditar el diff real, no el mensaje.
+- **La barrera canónica puede estar rota sin que nadie lo note** (13-nov-2026):
+  `bun run verify` era **ROJO** en Windows — el script `build` de
+  `package.json` terminaba con `cp -r` (Unix) → `cp: illegal option -- r`.
+  Estaba desde antes y todas las fases anteriores lo evitaron corriendo
+  eslint/tsc/next build por separado. Conclusión: **correr siempre el script
+  completo, no sus partes**, y si un script del repo usa herramientas de un
+  SO, hacerlo portable (aquí: `scripts/copy-standalone.mjs` con `fs.cpSync`).
+- **`bun` se puede tener sin tocar el repo:** `npm install --no-save
+  --no-package-lock bun` lo deja en `node_modules\.bin` (gitignored) →
+  harness canónico disponible y `package.json` intacto. Es la vía para
+  purgar deps con `bun remove` sin reescribir el lockfile a mano.
 
 ## 7. Personas y contexto
 
