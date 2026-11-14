@@ -6543,6 +6543,16 @@ cercano en runtime.
 **Commit:** `1d65cc8` — pusheado a `main` el 14-nov-2026 (working tree limpio)
 **Deploy:** automático en Vercel, build id `me4LhKJ06tWs_1A_jJn4H` (`/login` y `/` → 200)
 
+**Ajuste pedido por el dueño (14-nov-2026, posterior al deploy):** el trigger
+de la command palette estaba en la cabecera del sidebar, prácticamente encima
+del logo → se movió a su **propia franja justo debajo del logo y antes del
+Dashboard** (`sidebar.tsx`). El header queda solo con logo + colapsar. En
+expandido el botón ocupa el ancho completo (icono · "Buscar…" · badge `⌘K`); en
+colapsado, solo el icono centrado. Se conservan `data-command-trigger`
+(el foco de la paleta vuelve aquí al cerrarse), `aria-label` y
+`aria-expanded`, y el target sigue en ≥40px. El trigger móvil
+(`MobileTopBar`) no se toca: ahí no hay logo.
+
 ### Objetivo
 
 Que cualquier vista de Shikin sea **direccionable por URL** y que la app se

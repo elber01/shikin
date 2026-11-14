@@ -63,29 +63,6 @@ export function Sidebar() {
           </div>
         )}
         <div className="flex items-center gap-1">
-          {/* Trigger de la command palette (⌘K / Ctrl+K) */}
-          <button
-            type="button"
-            onClick={() => setCommandPaletteOpen(true)}
-            data-command-trigger
-            className={cn(
-              'flex items-center gap-2 rounded-md border border-border bg-surface-2 text-muted-foreground hover:text-foreground transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-              sidebarCollapsed ? 'p-2' : 'px-2 py-1.5'
-            )}
-            aria-label={t['palette.triggerLabel']}
-            aria-expanded={commandPaletteOpen}
-          >
-            <Search className="w-4 h-4" />
-            {!sidebarCollapsed && (
-              <>
-                <span className="text-xs">{t['palette.triggerText']}</span>
-                <kbd className="rounded border border-border bg-surface px-1 text-[10px] font-mono">
-                  {shortcutHint}
-                </kbd>
-              </>
-            )}
-          </button>
           <button
             onClick={toggleSidebar}
             className="p-2 rounded-md hover:bg-surface-2 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
@@ -98,6 +75,32 @@ export function Sidebar() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Trigger de la command palette (⌘K / Ctrl+K) — franja propia, bajo el logo y sobre la nav */}
+      <div className="px-2 pt-2">
+        <button
+          type="button"
+          onClick={() => setCommandPaletteOpen(true)}
+          data-command-trigger
+          className={cn(
+            'flex w-full min-h-[40px] items-center gap-2 rounded-md border border-border bg-surface-2 text-muted-foreground hover:text-foreground transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+            sidebarCollapsed ? 'justify-center p-2' : 'px-3 py-2'
+          )}
+          aria-label={t['palette.triggerLabel']}
+          aria-expanded={commandPaletteOpen}
+        >
+          <Search className="w-4 h-4 shrink-0" />
+          {!sidebarCollapsed && (
+            <>
+              <span className="flex-1 text-left text-xs">{t['palette.triggerText']}</span>
+              <kbd className="rounded border border-border bg-surface px-1 text-[10px] font-mono">
+                {shortcutHint}
+              </kbd>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Session info — datos reales de la sesión activa */}
