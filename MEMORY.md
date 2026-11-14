@@ -79,7 +79,7 @@
 
 **Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + build + copia portable a standalone. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd` (instalado con `npm install --no-save --no-package-lock bun`; `package.json` y lockfiles intactos salvo las purgas aprobadas). E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`, desplegada: build id `oHDUufpsKCny2Xep00Hs2`).
 
-**⚠️ PENDIENTE DEL DUEÑO — migración de colores en producción (esperando la `DATABASE_URL` de Turso):** el dueño ya dio el visto bueno (14-nov-2026) pero **este sandbox no tiene la `DATABASE_URL`** (el `.env` local solo trae `NEXTAUTH_SECRET`; no hay Vercel CLI ni `.vercel/` enlazado) → hace falta que Edwin la pegue (Vercel → Settings → Environment Variables). La app ya resuelve colores por token en runtime (tolera HEX heredado), pero la BD de Turso conserva los HEX antiguos. Secuencia: `bun scripts/migrate-category-colors.ts --dry-run --allow-production` (ver) → `--apply --allow-production` (escribe, con backup) → `--rollback <backup>` (deshace). **El gate `--allow-production` es obligatorio para cualquier modo contra `libsql:`** (incluido dry-run). No ejecutar contra producción sin la URL a mano (riesgo de datos).
+**✅ MIGRACIÓN DE COLORES EN TURSO EJECUTADA (14-nov-2026):** con el visto bueno del dueño y la `DATABASE_URL` facilitada por él, `scripts/migrate-category-colors.ts` corrió contra producción: dry-run → apply → control. **95/95 categorías migradas** de HEX a claves `cat-N` (13 sin color intactas, 0 ya en token antes). Backup en `db/category-colors.2026-11-14T20-32-27-727Z.backup` (gitignored). Dry-run de control: 0 pendientes. La BD de prod ya cumple la convención 10-U1. **Acción pendiente de Edwin: rotar el token de Turso** (es una credencial de escritura que pasó por el chat).
 
 **✅ 10-U1 COMMITEADA Y PUSHEADA (13-nov-2026):** commit `821ee87` → `main` (`origin/main` verificado) + commit de docs `8c70224`. **Deploy confirmado en producción** (build id `rR0OK7…` → `oHDUufpsKCny2Xep00Hs2`; `/login` y `/` → 200). 10-U0 = `7a53c1f` (commiteado, pusheado y desplegado).
 
@@ -446,10 +446,17 @@ pendiente de repoint (§5).
     de producto), servicio `categories-service.ts`, seed y picker migrados, y
     el render **nunca** emite HEX (tolerante a HEX heredado → se puede
     desplegar antes de migrar los datos).
-    **PENDIENTE (decisión del dueño):** ejecutar la migración en Turso —
-    `bun scripts/migrate-category-colors.ts --dry-run --allow-production`
-    → `--apply --allow-production` → `--rollback <backup>`. Sin ejecutar, la
-    BD de prod conserva HEX (funcional, pero fuera de la convención).
+    **MIGRACIÓN EN PROD EXECUTADA (14-nov-2026):** con el visto bueno del
+    dueño, `scripts/migrate-category-colors.ts` corrió contra Turso:
+    dry-run (108 categorías · 95 a migrar · 13 sin color intactas · 0 ya en
+    token) → `--apply --allow-production` → **95/95 filas actualizadas**
+    (lotes de 100 en transacción, backup previo
+    `db/category-colors.2026-11-14T20-32-27-727Z.backup`) → dry-run de
+    control: **95 ya en token · 0 a migrar** ("la base ya está normalizada").
+    La BD de producción ya cumple la convención 10-U1.
+    Rollback disponible: `bun scripts/migrate-category-colors.ts --rollback
+    "db/category-colors.2026-11-14T20-32-27-727Z.backup" --allow-production`.
+    **Pendiente de Edwin: rotar el token de Turso** (pasó por el chat).
 15. ~~**`TranslationKey` es un union type manual**~~ **RESUELTO (10-U1,
     13-nov-2026):** `TranslationKey` es `keyof typeof es` y `en` está tipado
     `Record<TranslationKey, string>` → **el compilador** garantiza la paridad

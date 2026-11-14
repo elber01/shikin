@@ -6698,3 +6698,56 @@ documentados; A8 se anotó como deuda #24.
 pendientes de planificación. Después, el bloque de agentes (multi-tenant +
 endpoint OpenAI-compatible): Fase 0 (roadmap) → Fase 1 (capa de servicios) →
 tools + log auditable + undo → consola in-app → servidor MCP.
+
+## PHASE 10 — OPS: migración de colores de categoría en Turso (producción)
+
+**Task ID:** 10-U1/ops
+**Agent:** Coordinador (ops) — sin subagentes: es una ejecución de script ya revisado
+**Owner:** Edwin (visto bueno explícito: 14-nov-2026 — "Sí, la pego y la migras")
+**Status:** ✅ Ejecutada y verificada — 95/95 filas migradas, control en verde
+**Base:** `a1dfb32` (10-U2 commiteada y desplegada)
+
+### Contexto
+
+La fase 10-U1 dejó el **código** con colores de categoría como tokens
+semánticos (`cat-1..cat-12`) y la app **tolera** HEX heredado en runtime, pero
+la BD de Turso seguía guardando los HEX del seed. Edwin aprobó ejecutar la
+migración y facilitó la `DATABASE_URL` (host `finzen-radiant-virgo-tlprm2` +
+token de auth).
+
+### Ejecución
+
+1. **Dry-run** (`--dry-run --allow-production`): 108 categorías · **0 ya en
+   token** · 13 sin color (intactas) · **95 a migrar**. El mapa coincidió
+   exactamente con el seed previsto, incluido el alias de producto
+   `#10B981` → `cat-1` (el vecino OKLab puro daría `cat-2`).
+2. **Apply** (`--apply --allow-production`): backup previo
+   `db/category-colors.2026-11-14T20-32-27-727Z.backup` (382 líneas) →
+   **95/95 filas actualizadas** en lotes de 100 dentro de transacción.
+   Exit code 0.
+3. **Control** (dry-run posterior): **95 ya en token · 13 sin color · 0 a
+   migrar** → "la base ya está normalizada". Exit code 0.
+
+### Verificación
+
+- Backup legítimamente formado y **cubierto por `.gitignore:20`
+  (`db/*.backup`)** → no aparece en `git status` ni puede entrar en un commit.
+- **Smoke de producción** tras la migración: `/login` 200 · `/` 200 ·
+  `/?view=reports|budgets|transactions|bogus` → 200 (deep-links de 10-U2
+  vivos). Build id `6534bPsEAxRknwx7oYTaq`.
+- No hizo falta redesplegar: el deploy activo ya resolvía HEX→token en
+  runtime, así que el aspecto visual es idéntico antes y después.
+
+### Seguridad
+
+- El token **no** se guardó en el repo: se mantuvo en un fichero temporal
+  fuera del árbol (`%TEMP%\opencode\turso-url.txt`) y se cargó como variable
+  de entorno solo en las invocaciones del script. **No** se puso en `.env` a
+  propósito: `.env` lo lee también el dev server, y un `DATABASE_URL` de
+  producción en local haría que `bun run dev` escribiera en Turso.
+- El propio script **enmascara** el token al imprimir el destino
+  (`describeTarget()` borra `authToken`, usuario y contraseña).
+- **Pendiente para Edwin: rotar el token de Turso** (es una credencial de
+  escritura que ha pasado por este chat). El backup local se conserva
+  mientras no confirme visualmente que los colores son correctos; el
+  rollback es `bun scripts/migrate-category-colors.ts --rollback "db/category-colors.2026-11-14T20-32-27-727Z.backup" --allow-production`.
