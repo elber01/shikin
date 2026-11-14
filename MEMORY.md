@@ -81,7 +81,7 @@
 
 **⚠️ PENDIENTE DE DECISIÓN DEL DUEÑO — migración de colores en producción:** la app ya resuelve colores por token en runtime (tolera HEX heredado), pero la BD de Turso conserva los HEX antiguos. Para alinearla: `bun scripts/migrate-category-colors.ts --dry-run --allow-production` (ver) → `--apply --allow-production` (escribe, con backup) → `--rollback <backup>` (deshace). **El gate `--allow-production` es obligatorio para cualquier modo contra `libsql:`** (incluido dry-run). No ejecutar contra producción sin su visto bueno (riesgo de datos).
 
-**✅ 10-U1 COMMITEADA Y PUSHEADA (13-nov-2026):** commit `821ee87` → `main` (`origin/main` verificado). Working tree limpio. 10-U0 = `7a53c1f` (commiteado, pusheado y desplegado).
+**✅ 10-U1 COMMITEADA Y PUSHEADA (13-nov-2026):** commit `821ee87` → `main` (`origin/main` verificado) + commit de docs `8c70224`. **Deploy confirmado en producción** (build id `rR0OK7…` → `oHDUufpsKCny2Xep00Hs2`; `/login` y `/` → 200). Working tree limpio. 10-U0 = `7a53c1f` (commiteado, pusheado y desplegado).
 
 Sesión 13-nov-2026 (10-U1 — design system + tokens de categoría + i18n derivado + limpieza; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
 - **Alcance:** 4 bloques. B1 (color de categoría como token), B2 (design system propio en `src/components/finzen/ui/`), B3 (i18n con tipo derivado), B4 (limpieza de 34 ficheros + 35 deps). Cierra las deudas #13, #14 y #15.

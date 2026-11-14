@@ -6327,6 +6327,7 @@ traducida **con el número de transacciones**.
 **Status:** ✅ Cerrado — revisor APRUEBA, 0 bloqueantes, `bun run verify` exit 0
 **Base:** `7a53c1f` (10-U0, ya commiteado y desplegado)
 **Commit:** `821ee87` — pusheado a `main` el 13-nov-2026 (working tree limpio)
+**Deploy:** automático en Vercel, build id `oHDUufpsKCny2Xep00Hs2` (`/login` y `/` → 200)
 
 ### Objetivo
 
