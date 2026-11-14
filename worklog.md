@@ -6540,6 +6540,8 @@ cercano en runtime.
 **Owner:** Edwin (aprobación: "Adelante — plan completo", 14-nov-2026)
 **Status:** ✅ Cerrado — revisor APRUEBA, 0 bloqueantes, `bun run verify` exit 0
 **Base:** `f553376` (10-U1 commiteada y desplegada)
+**Commit:** `1d65cc8` — pusheado a `main` el 14-nov-2026 (working tree limpio)
+**Deploy:** automático en Vercel, build id `me4LhKJ06tWs_1A_jJn4H` (`/login` y `/` → 200)
 
 ### Objetivo
 

@@ -83,6 +83,8 @@
 
 **✅ 10-U1 COMMITEADA Y PUSHEADA (13-nov-2026):** commit `821ee87` → `main` (`origin/main` verificado) + commit de docs `8c70224`. **Deploy confirmado en producción** (build id `rR0OK7…` → `oHDUufpsKCny2Xep00Hs2`; `/login` y `/` → 200). 10-U0 = `7a53c1f` (commiteado, pusheado y desplegado).
 
+**✅ 10-U2 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `1d65cc8` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `oHDUufps…` → `me4LhKJ06tWs_1A_jJn4H`; `/login` y `/` → 200). Working tree limpio. 10-U1 = `821ee87` (commiteada, pusheada y desplegada) · 10-U0 = `7a53c1f` (commiteada, pusheada y desplegada).
+
 Sesión 14-nov-2026 (10-U2 — command palette + deep-links + teclado; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
 - **Alcance:** 6 pasos atómicos, cada uno con `bun run verify` en verde. Cierra deuda #24 y añade la convención 10-U2.
 - **Spec primero (coordinador, antes del código):** `SDD.md` §1 (viñeta "Navegación") y §5 **convención 8** (deep-links + `<Suspense>` + paleta + atajos); `skills.md` §6 (`add_view` actualizada + `view_deep_link` + `keyboard_shortcuts`); `AGENTS.md` §5 (subsección "Deep-links, command palette y navegación por teclado (10-U2)") y §6 (mapa + "Añadir una vista nueva"). `agents/orchestrator.md` **sin cambios**: U2 no añade, renombra ni altera ninguna skill invocable por el agente → no se activa la regla de `agents/orchestrator.md:12-14`.
