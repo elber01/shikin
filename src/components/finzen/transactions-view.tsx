@@ -21,10 +21,7 @@ import {
   type CurrencyCode,
 } from '@/lib/finzen/currency';
 import {
-  downloadTextFile,
-  exportFilename,
-  exportTransactionsCsv,
-  exportTransactionsJson,
+  downloadTransactions,
 } from '@/lib/finzen/export';
 import { intlLocale, localizedCategoryName } from '@/lib/finzen/localize';
 import { TransactionRow } from '@/components/finzen/transaction-row';
@@ -141,18 +138,16 @@ export function TransactionsView() {
   function exportFiltered(format: 'csv' | 'json') {
     if (filtered.length === 0) { toast.error(t['transactions.noTransactionsToExport']); return; }
     const ctx = { categories, accounts, locale, baseCurrency: baseCurrency as CurrencyCode };
-    const content =
-      format === 'json'
-        ? exportTransactionsJson(filtered, ctx, {
-            exportedAt: new Date().toISOString(),
-            filterApplied: { dateFilter, categoryFilter, search },
-          })
-        : exportTransactionsCsv(filtered, ctx);
-    downloadTextFile(
-      exportFilename('finzen-filtered', format),
-      content,
-      format === 'json' ? 'application/json' : 'text/csv'
-    );
+    downloadTransactions({
+      rows: filtered,
+      ctx,
+      format,
+      prefix: 'finzen-filtered',
+      envelope: {
+        exportedAt: new Date().toISOString(),
+        filterApplied: { dateFilter, categoryFilter, search },
+      },
+    });
     toast.success(
       t['transactions.exportedCount']
         .replace('{n}', String(filtered.length))

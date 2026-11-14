@@ -1,8 +1,8 @@
 'use client';
 
-import { Home, Receipt, Plus, BarChart3, Settings, Wallet, PieChart, FileUp, Menu, LogOut } from 'lucide-react';
+import { Plus, Menu, LogOut, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFinZenStore, type ViewKey } from '@/store/finzen-store';
+import { useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { otherLocale } from '@/lib/finzen/localize';
 import { useTheme } from 'next-themes';
@@ -12,37 +12,26 @@ import { useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { signOut } from 'next-auth/react';
 import { Separator } from '@/components/ui/separator';
+import {
+  MOBILE_MORE,
+  MOBILE_PRIMARY,
+  MOBILE_SECONDARY,
+  VIEW_REGISTRY,
+} from './view-registry';
+import type { ViewKey } from '@/lib/finzen/views';
+import { useViewNavigation } from '@/hooks/use-view-navigation';
 
-type TabKey = 'nav.dashboard' | 'nav.transactions' | 'nav.reports' | 'nav.settings' | 'nav.accounts' | 'nav.budgets' | 'nav.import' | 'nav.more';
-
-const LEFT_TABS: { view: ViewKey; icon: typeof Home; key: TabKey }[] = [
-  { view: 'dashboard', icon: Home, key: 'nav.dashboard' },
-  { view: 'transactions', icon: Receipt, key: 'nav.transactions' },
-];
-
-// [UX fix, auditoría P1-4] "Cuentas" era inaccesible en móvil — ahora es tab.
-const RIGHT_TAB: { view: ViewKey; icon: typeof Home; key: TabKey } = {
-  view: 'accounts',
-  icon: Wallet,
-  key: 'nav.accounts',
-};
-
-// Las vistas menos frecuentes viven en el sheet "Más".
-const MORE_ITEMS: { view: ViewKey; icon: typeof Home; key: TabKey }[] = [
-  { view: 'budgets', icon: PieChart, key: 'nav.budgets' },
-  { view: 'reports', icon: BarChart3, key: 'nav.reports' },
-  { view: 'import', icon: FileUp, key: 'nav.import' },
-  { view: 'settings', icon: Settings, key: 'nav.settings' },
-];
-const MORE_VIEWS = MORE_ITEMS.map((i) => i.view);
+/** Vistas que viven en el sheet "Más" (para el estado activo del botón). */
+const MORE_VIEWS: readonly ViewKey[] = MOBILE_MORE;
 
 export function BottomTabBar() {
-  const { activeView, setActiveView, setAddSheetOpen, locale } = useFinZenStore();
+  const { activeView, setAddSheetOpen, locale } = useFinZenStore();
   const [moreOpen, setMoreOpen] = useState(false);
+  const navigate = useViewNavigation();
   const t = translations[locale];
 
   function goTo(view: ViewKey) {
-    setActiveView(view);
+    navigate(view);
     setMoreOpen(false);
   }
 
@@ -60,18 +49,19 @@ export function BottomTabBar() {
         aria-label={t['a11y.bottomNav']}
       >
         <div className="flex items-center justify-around h-full max-w-md mx-auto">
-          {LEFT_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const active = activeView === tab.view;
+          {MOBILE_PRIMARY.map((view) => {
+            const meta = VIEW_REGISTRY[view];
+            const Icon = meta.icon;
+            const active = activeView === view;
             return (
               <button
-                key={tab.view}
-                onClick={() => setActiveView(tab.view)}
+                key={view}
+                onClick={() => navigate(view)}
                 className={tabClass(active)}
                 aria-current={active ? 'page' : undefined}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[11px] font-medium">{t[tab.key]}</span>
+                <span className="text-[11px] font-medium">{t[meta.labelKey]}</span>
               </button>
             );
           })}
@@ -86,20 +76,22 @@ export function BottomTabBar() {
           </button>
 
           {/* Cuentas — antes inaccesible en móvil */}
-          {(() => {
-            const Icon = RIGHT_TAB.icon;
-            const active = activeView === RIGHT_TAB.view;
+          {MOBILE_SECONDARY.map((view) => {
+            const meta = VIEW_REGISTRY[view];
+            const Icon = meta.icon;
+            const active = activeView === view;
             return (
               <button
-                onClick={() => setActiveView(RIGHT_TAB.view)}
+                key={view}
+                onClick={() => navigate(view)}
                 className={tabClass(active)}
                 aria-current={active ? 'page' : undefined}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[11px] font-medium">{t[RIGHT_TAB.key]}</span>
+                <span className="text-[11px] font-medium">{t[meta.labelKey]}</span>
               </button>
             );
-          })()}
+          })}
 
           {/* Más — abre sheet con Presupuestos / Reportes / Importar / Ajustes */}
           <button
@@ -123,22 +115,25 @@ export function BottomTabBar() {
             <SheetTitle className="text-base">{t['nav.more']}</SheetTitle>
           </SheetHeader>
           <div className="grid grid-cols-2 gap-2 px-1">
-            {MORE_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const active = activeView === item.view;
+            {MOBILE_MORE.map((view) => {
+              const meta = VIEW_REGISTRY[view];
+              const Icon = meta.icon;
+              const active = activeView === view;
               return (
                 <button
-                  key={item.view}
-                  onClick={() => goTo(item.view)}
+                  key={view}
+                  onClick={() => goTo(view)}
                   className={cn(
                     'flex flex-col items-center gap-2 py-5 rounded-xl border transition-colors active:scale-[0.98]',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
                     active
                       ? 'border-primary/40 bg-primary/5 text-primary'
                       : 'border-border bg-surface hover:bg-surface-2 text-foreground'
                   )}
+                  aria-current={active ? 'page' : undefined}
                 >
                   <Icon className="w-6 h-6" />
-                  <span className="text-sm font-medium">{t[item.key]}</span>
+                  <span className="text-sm font-medium">{t[meta.labelKey]}</span>
                 </button>
               );
             })}
@@ -161,7 +156,7 @@ export function BottomTabBar() {
 }
 
 export function MobileTopBar() {
-  const { locale, setLocale } = useFinZenStore();
+  const { locale, setLocale, commandPaletteOpen, setCommandPaletteOpen } = useFinZenStore();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const t = translations[locale];
@@ -182,6 +177,17 @@ export function MobileTopBar() {
           <span className="text-lg font-bold text-primary">{t['app.name']}</span>
         </div>
         <div className="flex items-center gap-1">
+          {/* Trigger de la command palette (⌘K / Ctrl+K) */}
+          <button
+            type="button"
+            onClick={() => setCommandPaletteOpen(true)}
+            data-command-trigger
+            className="p-2 rounded-md hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            aria-label={t['palette.triggerLabel']}
+            aria-expanded={commandPaletteOpen}
+          >
+            <Search className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setLocale(otherLocale(locale))}
             className="px-2 py-1 rounded-md hover:bg-surface-2 text-xs font-semibold"

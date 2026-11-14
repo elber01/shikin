@@ -38,6 +38,7 @@ import { EmptyState } from '@/components/finzen/ui/empty-state';
 import { TransactionRow } from '@/components/finzen/transaction-row';
 import { useAlerts } from '@/hooks/use-alerts';
 import { useIsMobile } from '@/hooks/use-is-mobile';
+import { useViewNavigation } from '@/hooks/use-view-navigation';
 
 /**
  * Token del icono de alerta por severidad.
@@ -58,11 +59,12 @@ const ALERT_ICON_COLOR = {
 const ALERT_ICON_BG = 'color-mix(in oklab, currentColor 12%, transparent)';
 
 export function DashboardView() {
-  const { transactions, accounts, categories, locale, baseCurrency, setActiveView, setAddSheetOpen, setEditingTransactionId, loading } =
+  const { transactions, accounts, categories, locale, baseCurrency, setAddSheetOpen, setEditingTransactionId, loading } =
     useFinZenStore();
   const t = translations[locale];
   const alerts = useAlerts();
   const isMobile = useIsMobile();
+  const navigate = useViewNavigation();
 
   function handleEditTx(id: string) {
     setEditingTransactionId(id);
@@ -254,7 +256,7 @@ export function DashboardView() {
           descriptionClassName="mb-5 max-w-md"
           action={{
             label: t['dashboard.emptyCreateAccount'],
-            onClick: () => setActiveView('accounts'),
+            onClick: () => navigate('accounts'),
           }}
           secondaryAction={{
             label: t['dashboard.emptyRecordTransaction'],
@@ -491,7 +493,7 @@ export function DashboardView() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setActiveView('transactions')}
+                onClick={() => navigate('transactions')}
                 className="text-primary"
               >
                 {t['dashboard.viewAll']}

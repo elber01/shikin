@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { useFinZenStore } from '@/store/finzen-store';
 import { Sidebar } from './sidebar';
 import { BottomTabBar, MobileTopBar } from './bottom-tab-bar';
@@ -13,11 +14,17 @@ import { ReportsView } from './reports-view';
 import { ImportView } from './import-view';
 import { SettingsView } from './settings-view';
 import { ViewTransition } from './view-transition';
+import { ViewRouteSync } from './view-route-sync';
+import { CommandPalette } from './command-palette';
+import { ShortcutsDialog } from './shortcuts-dialog';
+import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { translations } from '@/lib/finzen/i18n';
+import type { ViewKey } from '@/lib/finzen/views';
 
-const VIEWS = {
+// `Record<ViewKey, …>` → `tsc` falla si falta una vista (anti-drift 10-U2).
+const VIEWS: Record<ViewKey, ComponentType> = {
   dashboard: DashboardView,
   transactions: TransactionsView,
   accounts: AccountsView,
@@ -25,11 +32,14 @@ const VIEWS = {
   reports: ReportsView,
   import: ImportView,
   settings: SettingsView,
-} as const;
+};
 
 export function AppShell() {
   const { activeView, sidebarCollapsed, loadData, loading, transactions, accounts, locale } = useFinZenStore();
   const t = translations[locale];
+
+  // Atajos globales — se activan UNA sola vez (no en cada vista).
+  useGlobalShortcuts();
 
   // Load data from API on mount
   useEffect(() => {
@@ -49,6 +59,9 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Deep-link: la URL (?view=…) y el store (activeView) quedan sincronizados. */}
+      <ViewRouteSync />
+
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-medium focus:shadow-lg"
@@ -77,6 +90,8 @@ export function AppShell() {
 
       <BottomTabBar />
       <AddTransactionSheet />
+      <CommandPalette />
+      <ShortcutsDialog />
     </div>
   );
 }

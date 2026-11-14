@@ -10,7 +10,7 @@
 > Diseño del sistema → `SDD.md` · Protocolo de agentes → `agent.md` ·
 > Catálogo de capacidades → `skills.md`.
 
-**Última actualización:** 13-nov-2026 (10-U1 — design system propio (`src/components/finzen/ui/`), color de categoría como token semántico (`cat-1..cat-12`, con script de migración pendiente de ejecutar en prod), i18n con tipo derivado (402 claves), limpieza de 34 ficheros + 35 deps, y `bun run verify` Repair: el script `build` era rojo en Windows por `cp -r` → ahora portable con `scripts/copy-standalone.mjs`)
+**Última actualización:** 14-nov-2026 (10-U2 — command palette (`cmdk`, `⌘K`/`Ctrl+K`), deep-links por vista (`/?view=<viewKey>`) con back/forward del navegador, navegación por teclado (`?` ayuda · `Alt+1..7` vista N · `Alt+N` nueva transacción), `ViewKey` con fuente de verdad única (`src/lib/finzen/views.ts`) y anti-drift por tipos, y foco visible + `prefers-reduced-motion`; 436 claves i18n)
 
 ---
 
@@ -75,13 +75,29 @@
 | **Flujo multiagente coordinador→planificador→implementador→revisor** | El coordinador orquesta y es el único que cierra (harness + memoria); roles materializados como agentes de opencode con permisos (planificador/revisor read-only) | `.opencode/agent/`, `agent.md` §4 |
 | **Consola de agentes: multiusuario y endpoint OpenAI-compatible** (decidido por el dueño 12-nov-2026, **no implementado todavía**) | La clave del proveedor LLM será **por usuario** (cifrada en reposo, con cuotas) → aísla a cada usuario y permite revocar por separado, a costa de duplicar el alcance de la fase de agentes. El cliente será un **endpoint compatible con OpenAI** (`LLM_BASE_URL` configurable) → una sola implementación de streaming + tool-calls cubre Anthropic vía gateway, OpenAI, Groq y modelos locales, sin acoplar el código a un vendor y **sin dependencias nuevas** (`fetch` nativo + `zod` ya instalado) | `MEMORY.md` §4 (sesión 12-nov-2026), `worklog.md` PHASE 10 |
 
-## 4. Estado actual (13-nov-2026)
+## 4. Estado actual (14-nov-2026)
 
-**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + build + copia portable a standalone. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd` (instalado con `npm install --no-save --no-package-lock bun`; `package.json` y lockfiles intactos salvo las purgas aprobadas). E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`).
+**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + build + copia portable a standalone. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd` (instalado con `npm install --no-save --no-package-lock bun`; `package.json` y lockfiles intactos salvo las purgas aprobadas). E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`, desplegada: build id `oHDUufpsKCny2Xep00Hs2`).
 
-**⚠️ PENDIENTE DE DECISIÓN DEL DUEÑO — migración de colores en producción:** la app ya resuelve colores por token en runtime (tolera HEX heredado), pero la BD de Turso conserva los HEX antiguos. Para alinearla: `bun scripts/migrate-category-colors.ts --dry-run --allow-production` (ver) → `--apply --allow-production` (escribe, con backup) → `--rollback <backup>` (deshace). **El gate `--allow-production` es obligatorio para cualquier modo contra `libsql:`** (incluido dry-run). No ejecutar contra producción sin su visto bueno (riesgo de datos).
+**⚠️ PENDIENTE DEL DUEÑO — migración de colores en producción (esperando la `DATABASE_URL` de Turso):** el dueño ya dio el visto bueno (14-nov-2026) pero **este sandbox no tiene la `DATABASE_URL`** (el `.env` local solo trae `NEXTAUTH_SECRET`; no hay Vercel CLI ni `.vercel/` enlazado) → hace falta que Edwin la pegue (Vercel → Settings → Environment Variables). La app ya resuelve colores por token en runtime (tolera HEX heredado), pero la BD de Turso conserva los HEX antiguos. Secuencia: `bun scripts/migrate-category-colors.ts --dry-run --allow-production` (ver) → `--apply --allow-production` (escribe, con backup) → `--rollback <backup>` (deshace). **El gate `--allow-production` es obligatorio para cualquier modo contra `libsql:`** (incluido dry-run). No ejecutar contra producción sin la URL a mano (riesgo de datos).
 
-**✅ 10-U1 COMMITEADA Y PUSHEADA (13-nov-2026):** commit `821ee87` → `main` (`origin/main` verificado) + commit de docs `8c70224`. **Deploy confirmado en producción** (build id `rR0OK7…` → `oHDUufpsKCny2Xep00Hs2`; `/login` y `/` → 200). Working tree limpio. 10-U0 = `7a53c1f` (commiteado, pusheado y desplegado).
+**✅ 10-U1 COMMITEADA Y PUSHEADA (13-nov-2026):** commit `821ee87` → `main` (`origin/main` verificado) + commit de docs `8c70224`. **Deploy confirmado en producción** (build id `rR0OK7…` → `oHDUufpsKCny2Xep00Hs2`; `/login` y `/` → 200). 10-U0 = `7a53c1f` (commiteado, pusheado y desplegado).
+
+Sesión 14-nov-2026 (10-U2 — command palette + deep-links + teclado; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
+- **Alcance:** 6 pasos atómicos, cada uno con `bun run verify` en verde. Cierra deuda #24 y añade la convención 10-U2.
+- **Spec primero (coordinador, antes del código):** `SDD.md` §1 (viñeta "Navegación") y §5 **convención 8** (deep-links + `<Suspense>` + paleta + atajos); `skills.md` §6 (`add_view` actualizada + `view_deep_link` + `keyboard_shortcuts`); `AGENTS.md` §5 (subsección "Deep-links, command palette y navegación por teclado (10-U2)") y §6 (mapa + "Añadir una vista nueva"). `agents/orchestrator.md` **sin cambios**: U2 no añade, renombra ni altera ninguna skill invocable por el agente → no se activa la regla de `agents/orchestrator.md:12-14`.
+- **Hallazgo del planificador (verificado en el código):** la lista de vistas vivía en **5 sitios** y el tipo `ViewKey` en otro → el drift era estructural, no hipotético.
+- **Paso 1 — fuente de verdad única:** `src/lib/finzen/views.ts` (puro: `VIEW_KEYS`, `ViewKey = (typeof VIEW_KEYS)[number]`, `DEFAULT_VIEW`, `isViewKey`, `parseViewKey`, `AssertNever`, `MissingViews`) + `src/components/finzen/view-registry.tsx` (`VIEW_REGISTRY: Record<ViewKey, ViewMeta>` → única lista de iconos; `MOBILE_PRIMARY`/`SECONDARY`/`MORE` con aserción de cobertura). El store **re-exporta** `ViewKey` (union manual eliminada) y añade `commandPaletteOpen`/`shortcutsDialogOpen`. `VIEWS` de `app-shell.tsx` pasa a `Record<ViewKey, …>`. **Anti-drift real:** añadir una vista a `VIEW_KEYS` hace fallar `tsc` (sonda verificada por implementador y revisor: 3 errores → revertido).
+- **Paso 2 — deep-link `/?view=<viewKey>`:** `view-route-sync.tsx` (único consumidor de `useSearchParams`) + `use-view-navigation.ts` (`navigate()`). La ruta `/` se prerenderiza estáticamente → **`<Suspense>` obligatorio** en `src/app/page.tsx` (sin él, Next 16 falla el build con `missing-suspense-with-csr-bailout`; verificado). `?view` ausente o inválido → `dashboard` + canonicalización con `replace` (el botón "atrás" no queda atrapado). Back/forward del navegador funciona porque cada cambio de vista hace `router.push`.
+  - **Desviación del plan (aceptada):** el sincronizador usa un guard `paramChanged` en vez de la invariante literal ("si `fromUrl !== activeView` → `setActiveView`"), que revirtió la vista optimista mientras el `router.push` no aterrizaba (flicker). El guard mantiene los 5 escenarios (deep-link en frío, back/forward, sin bucle, canonicalización, navegación repetida) — verificado por el revisor con simulación del efecto.
+- **Paso 3 — helper de export:** `downloadTransactions()` en `src/lib/finzen/export.ts` (la API previa no cambia) + los 3 call-sites (`settings-view`, `import-view`, `transactions-view`) → de-duplicación de 3 pegamentos. **Byte-comparación obligatoria:** 4/4 ficheros idénticos (SHA-256) antes/después (CSV y JSON de Ajustes/Importar/Transacciones, con `{exportedAt, accounts}` y `{exportedAt, filterApplied}`, `id`/`tags`/`importSource` verbatim).
+- **Paso 4 — command palette:** `src/components/finzen/command-palette.tsx` compone `ui/dialog.tsx` + `ui/command.tsx` **sin editarlos** y **sin usar `CommandDialog`** de shadcn (trae `"Command Palette"` en inglés). 4 grupos: navegación (7 vistas), acciones (nueva transacción, exportar CSV/JSON, atajos), apariencia (tema, idioma) y **transacciones** (solo con ≥2 caracteres, tope 25, ordenadas por `occurredOn` desc → abren la hoja de edición). La acción pendiente se ejecuta en `onCloseAutoFocus` (tras el desmontaje) → **sin modales solapados**; el foco vuelve al trigger (`[data-command-trigger]`). `platform.ts` con `useIsMacPlatform()` (`useSyncExternalStore`) → badge `Ctrl+K` en SSR, `⌘K` tras hidratar, sin mismatch.
+- **Paso 5 — atajos:** `use-global-shortcuts.ts` + `shortcuts-dialog.tsx` + tabla compartida `src/lib/finzen/shortcuts.ts` (handler y diálogo **no pueden divergir**). `⌘K`/`Ctrl+K` · `?` (ayuda) · `Alt+1..7` (vista N, vía `event.code`) · `Alt+N` (nueva transacción). Se ignoran en campos editables y con modales abiertos (**única excepción: `⌘K`/`Ctrl+K`**, que también funciona en un input — comportamiento estándar de editores; corregido en la spec, ver A1).
+- **Paso 6 — foco y movimiento:** `:focus-visible` en `@layer base` (outline `2px solid var(--ring)`) + bloque `@media (prefers-reduced-motion: reduce)`; `view-transition.tsx` con `useReducedMotion()`; `aria-current="page"` en el sheet "Más" de la barra móvil.
+- **4 avisos del revisor resueltos antes de cerrar:** (A3) `router.push` a la vista ya activa duplicaba la entrada del historial → ahora `replace` si la vista ya es la activa (verificado con 4 asserts y simulación de back/forward); (A4) las 2 tablas de atajos sin cabecera → `<thead>` + `<th scope="col">` + 2 claves i18n; (A5) `paletteKeywords` solo en inglés → añadidos sinónimos en español (identificadores de búsqueda, no texto visible); (A6) clave i18n muerta `palette.action.openTransaction` → eliminada de es y en.
+- **A1 (spec↔código):** la spec escrita decía que los atajos se ignoran en campos editables, pero `⌘K` debe funcionar ahí → **spec alineada con el código** en `AGENTS.md` §5 y `SDD.md` §5 (carve-out explícito). Recordatorio de `agent.md`: si el código contradice la spec, gana la spec → aquí se corrigió la spec porque el comportamiento es el estándar del sector.
+- **Verificación:** `bun run verify` exit 0 en los 6 pasos + verificación final del coordinador. Revisor **APRUEBA**, 0 bloqueantes; auditoría independiente de las 6 desviaciones declaradas, sonda anti-drift repetida (SHA-256 de `views.ts` idéntico antes/después), paridad i18n por script → **436 es / 436 en**, 0 faltantes, 0 sobrantes, 0 duplicados. Intactos: `prisma/schema.prisma`, `src/lib/auth/**`, `src/lib/db.ts`, **todo** `src/app/api/**`, `finance.ts`, `src/components/ui/**`, `package.json` y `bun.lock` (0 dependencias nuevas) → doble entrada, net worth y contrato v1 sin tocar. 0 `as any` nuevos, 0 colores crudos nuevos.
+- **Desvíos aceptados y documentados:** los iconos de la barra móvil cambiaron de forma para unificarlos con el registry (Home→LayoutDashboard, PieChart→Target, FileUp→Download — cosmético, misma etiqueta i18n, mismo destino y orden); `Alt+1..7` puede chocar con el cambio de pestaña de Chrome/Windows; con dos navegaciones muy rápidas puede haber un flicker puntual (converge).
 
 Sesión 13-nov-2026 (10-U1 — design system + tokens de categoría + i18n derivado + limpieza; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
 - **Alcance:** 4 bloques. B1 (color de categoría como token), B2 (design system propio en `src/components/finzen/ui/`), B3 (i18n con tipo derivado), B4 (limpieza de 34 ficheros + 35 deps). Cierra las deudas #13, #14 y #15.
@@ -473,6 +489,18 @@ pendiente de repoint (§5).
     (hoisted) sustituye a `uuid@11.1.0` (directa) tras la purga de 10-U1 —
     mismo sha512 que el `next-auth/uuid` anidado previo, integridad verificada.
     No es una regresión, pero conviene saberlo al comparar lockfiles.
+24. **`src/components/ui/dialog.tsx` tiene deuda que AGENTS.md §7 impide
+    arreglar desde el shell:** el botón de cerrar lleva `<span class="sr-only">
+    Close</span>` (**en inglés**, afecta a todos los diálogos del repo,
+    incluida la command palette de 10-U2) y el overlay usa `bg-black/50`
+    (color crudo). Es preexistente y la primitiva es estándar: se acepta como
+    deuda documentada (mismo criterio que #16). Si el dueño autoriza tocar
+    `src/components/ui/*`, el fix es un wrapper propio o unPR con i18n.
+25. **Sin tests automatizados** (deuda global, ya citada en `SDD.md` §7.1):
+    la lógica de 10-U2 se verificó con harness + sonda anti-drift + humo
+    manual + un test temporal fuera del repo (4 asserts sobre el historial de
+    `navigate()`). La red de seguridad real llega en **10-U4 (Vitest)** —
+    es el blocker del bloque de agentes (multi-tenant).
 
 ## 6. Lecciones aprendidas (para no repetir errores)
 
@@ -522,6 +550,24 @@ pendiente de repoint (§5).
   --no-package-lock bun` lo deja en `node_modules\.bin` (gitignored) →
   harness canónico disponible y `package.json` intacto. Es la vía para
   purgar deps con `bun remove` sin reescribir el lockfile a mano.
+- **Spec vs código: corregir la spec, no forzar el código, cuando el
+  comportamiento correcto es el estándar del sector** (14-nov-2026): la
+  convención 10-U2 decía "los atajos se ignoran con el foco en un campo
+  editable", pero `⌘K` **debe** funcionar ahí (como en Linear/VS Code) y así
+  lo implementó el código. El revisor lo marcó como desviación. Resolución:
+  la spec se corrigió con el carve-out explícito (`⌘K`/`Ctrl+K` es la única
+  excepción). Regla práctica: `agent.md` dice "si el código contradice la
+  spec, gana la spec", pero eso es para *no dejar que el implementador
+  improvise*; cuando la spec se escribió por copying de un plan y el
+  comportamiento estándar es otro, la spec es lo que hay que arreglar.
+- **Deep-link en una app de una sola ruta prerenderizada:** `useSearchParams()`
+  en Next 16 sobre una ruta estática (`/`) exige un límite `<Suspense>` o el
+  build falla con `missing-suspense-with-csr-bailout`. Además, la vista
+  optimista (`setActiveView` antes de que `router.push` aterrice) se revierte
+  si el efecto de sincronía compara la URL con el store sin un guard de
+  "el parámetro cambió" → flicker. Patrón usado en 10-U2: `paramChanged` +
+  `router.replace` para canonicalizar (nunca `push` → el botón "atrás" no
+  queda atrapado).
 
 ## 7. Personas y contexto
 

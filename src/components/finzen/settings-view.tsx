@@ -31,10 +31,7 @@ import { useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { CURRENCIES, type CurrencyCode, type Locale } from '@/lib/finzen/currency';
 import {
-  downloadTextFile,
-  exportFilename,
-  exportTransactionsCsv,
-  exportTransactionsJson,
+  downloadTransactions,
 } from '@/lib/finzen/export';
 import { localeFlag, localizedPair } from '@/lib/finzen/localize';
 import { cn } from '@/lib/utils';
@@ -62,18 +59,16 @@ export function SettingsView() {
       return;
     }
     const ctx = { categories, accounts, locale, baseCurrency: baseCurrency as CurrencyCode };
-    const content =
-      format === 'json'
-        ? exportTransactionsJson(transactions, ctx, {
-            exportedAt: new Date().toISOString(),
-            accounts,
-          })
-        : exportTransactionsCsv(transactions, ctx);
-    downloadTextFile(
-      exportFilename('finzen-export', format),
-      content,
-      format === 'json' ? 'application/json' : 'text/csv'
-    );
+    downloadTransactions({
+      rows: transactions,
+      ctx,
+      format,
+      prefix: 'finzen-export',
+      envelope: {
+        exportedAt: new Date().toISOString(),
+        accounts,
+      },
+    });
     toast.success(t['common.exported'].replace('{format}', format.toUpperCase()));
   }
 

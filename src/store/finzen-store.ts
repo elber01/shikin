@@ -2,15 +2,12 @@
 
 import { create } from 'zustand';
 import type { Locale, CurrencyCode } from '@/lib/finzen/currency';
+import type { ViewKey } from '@/lib/finzen/views';
 
-export type ViewKey =
-  | 'dashboard'
-  | 'transactions'
-  | 'accounts'
-  | 'budgets'
-  | 'reports'
-  | 'import'
-  | 'settings';
+// La fuente de verdad del union de vistas es `src/lib/finzen/views.ts`
+// (convención 10-U2). Aquí solo se re-exporta para no romper los imports
+// existentes (`@/store/finzen-store`).
+export type { ViewKey } from '@/lib/finzen/views';
 
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'adjustment';
 
@@ -87,6 +84,10 @@ interface FinZenState {
   sidebarCollapsed: boolean;
   editingTransactionId: string | null;
   loading: boolean;
+  /** Command palette (⌘K / Ctrl+K) — UI pura, sin contrato de API. */
+  commandPaletteOpen: boolean;
+  /** Diálogo de ayuda de atajos — UI pura. */
+  shortcutsDialogOpen: boolean;
 
   // Server data
   transactions: Transaction[];
@@ -103,6 +104,8 @@ interface FinZenState {
   toggleSidebar: () => void;
   setEditingTransactionId: (id: string | null) => void;
   setLoading: (loading: boolean) => void;
+  setCommandPaletteOpen: (open: boolean) => void;
+  setShortcutsDialogOpen: (open: boolean) => void;
 
   // Data actions (server-synced)
   loadData: () => Promise<void>;
@@ -198,6 +201,8 @@ export const useFinZenStore = create<FinZenState>((set, get) => ({
   // [UX] Empieza en true: cubre desde el primer render hasta que loadData
   // resuelve — evita el flash de "¡Bienvenido! $0.00" con datos existentes.
   loading: true,
+  commandPaletteOpen: false,
+  shortcutsDialogOpen: false,
 
   // Data
   transactions: [],
@@ -214,6 +219,8 @@ export const useFinZenStore = create<FinZenState>((set, get) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setEditingTransactionId: (id) => set({ editingTransactionId: id }),
   setLoading: (loading) => set({ loading }),
+  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  setShortcutsDialogOpen: (open) => set({ shortcutsDialogOpen: open }),
 
   // Load all data from API
   loadData: async () => {
@@ -438,6 +445,8 @@ export const useFinZenStore = create<FinZenState>((set, get) => ({
       addSheetOpen: false,
       editingTransactionId: null,
       loading: false,
+      commandPaletteOpen: false,
+      shortcutsDialogOpen: false,
       // Keep locale, baseCurrency, themePref — they'll be reloaded on next login
     });
   },

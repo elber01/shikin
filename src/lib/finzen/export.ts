@@ -162,3 +162,45 @@ export function downloadTextFile(filename: string, content: string, mimeType: st
 export function exportFilename(prefix: string, extension: 'csv' | 'json'): string {
   return `${prefix}-${new Date().toISOString().split('T')[0]}.${extension}`;
 }
+
+/** Opciones de `downloadTransactions()`. */
+export interface DownloadTransactionsOptions {
+  /** Filas a exportar (el llamador decide qué filas: todas o filtradas). */
+  rows: ExportRow[];
+  /** Contexto de localización (categorías, cuentas, locale, moneda base). */
+  ctx: ExportContext;
+  /** Formato del archivo. */
+  format: 'csv' | 'json';
+  /** Prefijo del nombre de archivo (def 'finzen-export'). */
+  prefix?: string;
+  /** Metadatos del JSON (solo se aplican si `format === 'json'`). */
+  envelope?: Record<string, unknown>;
+}
+
+/**
+ * Export + descarga en un solo paso (fase 10-U2).
+ *
+ * Es el ÚNICO camino de descarga de transacciones del repo: el contenido, el
+ * nombre del archivo y el MIME son exactamente los que producían los tres
+ * call-sites (Ajustes, Importar, Transacciones) antes de este helper.
+ *
+ * El toast lo pone el llamador (aquí no hay UI). Si no hay filas, el llamador
+ * muestra su mensaje de "sin datos" y NO llama a este helper.
+ */
+export function downloadTransactions(opts: DownloadTransactionsOptions): {
+  filename: string;
+  count: number;
+} {
+  const { rows, ctx, format, prefix = 'finzen-export', envelope } = opts;
+  const filename = exportFilename(prefix, format);
+  const content =
+    format === 'json'
+      ? exportTransactionsJson(rows, ctx, envelope)
+      : exportTransactionsCsv(rows, ctx);
+  downloadTextFile(
+    filename,
+    content,
+    format === 'json' ? 'application/json' : 'text/csv'
+  );
+  return { filename, count: rows.length };
+}

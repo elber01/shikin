@@ -13,10 +13,7 @@ import { CURRENCIES, type CurrencyCode } from '@/lib/finzen/currency';
 import { parseLocalDate, toLocalDateString, toStorageISOString, matchCategory } from '@/lib/finzen/date-utils';
 import { parseCSVLine } from '@/lib/finzen/csv';
 import {
-  downloadTextFile,
-  exportFilename,
-  exportTransactionsCsv,
-  exportTransactionsJson,
+  downloadTransactions,
 } from '@/lib/finzen/export';
 import { cn } from '@/lib/utils';
 import { OcrFlow } from '@/components/finzen/ocr-flow';
@@ -133,18 +130,16 @@ export function ImportView() {
   function exportData(format: 'csv' | 'json') {
     if (store.transactions.length === 0 && store.accounts.length === 0) { toast.error(t['common.noData']); return; }
     const ctx = { categories, accounts, locale, baseCurrency: baseCurrency as CurrencyCode };
-    const content =
-      format === 'json'
-        ? exportTransactionsJson(store.transactions, ctx, {
-            exportedAt: new Date().toISOString(),
-            accounts: store.accounts,
-          })
-        : exportTransactionsCsv(store.transactions, ctx);
-    downloadTextFile(
-      exportFilename('finzen-export', format),
-      content,
-      format === 'json' ? 'application/json' : 'text/csv'
-    );
+    downloadTransactions({
+      rows: store.transactions,
+      ctx,
+      format,
+      prefix: 'finzen-export',
+      envelope: {
+        exportedAt: new Date().toISOString(),
+        accounts: store.accounts,
+      },
+    });
     toast.success(t['common.exported'].replace('{format}', format.toUpperCase()));
   }
 

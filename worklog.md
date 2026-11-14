@@ -6532,3 +6532,167 @@ cercano en runtime.
 - La consola de agentes (multi-tenant, endpoint OpenAI-compatible) sigue
   sin empezar: Fase 0 → Fase 1 (capa de servicios) → capa de tools + log
   auditable + undo → consola in-app → servidor MCP.
+
+## PHASE 10 — U2: command palette + deep-links por vista + navegación por teclado
+
+**Task ID:** 10-U2
+**Agent:** Coordinador → Planificador → Implementador → Revisor
+**Owner:** Edwin (aprobación: "Adelante — plan completo", 14-nov-2026)
+**Status:** ✅ Cerrado — revisor APRUEBA, 0 bloqueantes, `bun run verify` exit 0
+**Base:** `f553376` (10-U1 commiteada y desplegada)
+
+### Objetivo
+
+Que cualquier vista de Shikin sea **direccionable por URL** y que la app se
+pueda manejar **sin ratón**: command palette (`cmdk`, ya instalada), deep-links
+`/?view=<vista>` con back/forward del navegador, atajos globales y foco
+visible. Cero dependencias nuevas, contrato v1 intacto.
+
+### Diagnóstico (el planificador lo verificó en el código, no de memoria)
+
+- La lista de vistas vivía en **5 sitios** (`app-shell.tsx` → `VIEWS`,
+  `sidebar.tsx` → `NAV_ITEMS`, `bottom-tab-bar.tsx` → `LEFT_TABS`/`RIGHT_TAB`/
+  `MORE_ITEMS`, `dashboard-view.tsx`, el store) y el union `ViewKey` en un
+  sexto → **el drift era estructural**, no hipotético. `VIEWS` era un
+  `as const` **no exhaustivo**: añadir una vista a `ViewKey` sin registrarla
+  compilaba y reventaba en runtime.
+- **Cero** manejo de teclado propio en el repo (`onKeyDown`/`keydown`/
+  `metaKey` → 0 matches). `Escape`/`Tab` solo por Radix.
+- La app es **una sola ruta** (`src/app/page.tsx`) y **no existe grupo
+  `(app)`**; `/` se **prerenderiza estáticamente** → `useSearchParams()`
+  exige un límite `<Suspense>` (error de build de Next 16:
+  `useSearchParams() should be wrapped in a suspense boundary at page "/"`).
+- `cmdk` **ya estaba instalada** (conservada en 10-U1) y
+  `src/components/ui/command.tsx` existe y la envuelve → **0 deps nuevas**.
+  `CommandDialog` de shadcn trae `"Command Palette"` en inglés → no se usa.
+
+### Spec primero (coordinador, antes del código)
+
+| Documento | Cambio |
+|---|---|
+| `SDD.md` §1 | Viñeta "Navegación": shell en una ruta única, vistas vía `?view=`, paleta y atajos son UI pura (no alteran contratos de API) |
+| `SDD.md` §5 | **Convención 8**: deep-links `/?view=<viewKey>`, `VIEW_KEYS` como fuente de verdad, `<Suspense>` obligatorio, command palette, tabla de atajos |
+| `skills.md` §6 | `add_view` actualizada (anti-drift) + recetas nuevas `view_deep_link` y `keyboard_shortcuts` |
+| `AGENTS.md` §5 | Subsección "Deep-links, command palette y navegación por teclado (10-U2)" |
+| `AGENTS.md` §6 | Mapa del repo (8 ficheros nuevos) + "Añadir una vista nueva" reescrito |
+| `agents/orchestrator.md` | **SIN CAMBIOS** — U2 no añade, renombra ni altera ninguna skill invocable por el agente → no se activa la regla de `agents/orchestrator.md:12-14` |
+
+### Los 6 pasos (cada uno con `bun run verify` en verde)
+
+1. **Fuente de verdad única de vistas.** `src/lib/finzen/views.ts` (puro:
+   `VIEW_KEYS`, `ViewKey = (typeof VIEW_KEYS)[number]`, `DEFAULT_VIEW`,
+   `isViewKey`, `parseViewKey`, `AssertNever`, `MissingViews`) +
+   `src/components/finzen/view-registry.tsx` (`VIEW_REGISTRY:
+   Record<ViewKey, ViewMeta>` → única lista de iconos; `MOBILE_PRIMARY`/
+   `SECONDARY`/`MORE` con aserción de cobertura). El store re-exporta
+   `ViewKey`; `VIEWS` pasa a `Record<ViewKey, …>`. **Anti-drift real:** añadir
+   una vista a `VIEW_KEYS` hace fallar `tsc` (sonda: 3 errores → revertido).
+2. **Deep-link `/?view=`.** `view-route-sync.tsx` (único consumidor de
+   `useSearchParams`) + `use-view-navigation.ts` (`navigate()` =
+   `setActiveView` optimista + `router.push`). `<Suspense>` en
+   `src/app/page.tsx` (el build lo demuestra). `?view` ausente o inválido →
+   `dashboard` + canonicalización con `replace` (el botón "atrás" no queda
+   atrapado). Back/forward funciona.
+3. **Helper de export compartido.** `downloadTransactions()` en
+   `src/lib/finzen/export.ts` (la API previa no cambia) + los 3 call-sites
+   (`settings-view`, `import-view`, `transactions-view`) → de-duplicación de
+   3 pegamentos. **Byte-comparación obligatoria: 4/4 ficheros idénticos**
+   (SHA-256) antes/después.
+4. **Command palette.** `command-palette.tsx` compone `ui/dialog.tsx` +
+   `ui/command.tsx` **sin editarlos** y **sin `CommandDialog`**. 4 grupos:
+   navegación (7 vistas), acciones (nueva transacción, exportar CSV/JSON,
+   atajos), apariencia (tema, idioma) y **transacciones** (solo con ≥2
+   caracteres, tope 25, ordenadas por `occurredOn` desc → abren la hoja de
+   edición). La acción pendiente se ejecuta en `onCloseAutoFocus` (tras el
+   desmontaje) → **sin modales solapados**; el foco vuelve al trigger.
+   `platform.ts` con `useIsMacPlatform()` (`useSyncExternalStore`) → badge
+   `Ctrl+K` en SSR, `⌘K` tras hidratar, sin mismatch de hidratación.
+5. **Atajos + diálogo de ayuda.** `use-global-shortcuts.ts` +
+   `shortcuts-dialog.tsx` + **tabla compartida** `src/lib/finzen/shortcuts.ts`
+   (handler y diálogo no pueden divergir). `⌘K`/`Ctrl+K` · `?` (ayuda) ·
+   `Alt+1..7` (vista N, vía `event.code`) · `Alt+N` (nueva transacción).
+6. **Foco visible / reduced motion.** `:focus-visible` en `@layer base`
+   (outline `2px solid var(--ring)`) + `@media (prefers-reduced-motion:
+   reduce)`; `view-transition.tsx` con `useReducedMotion()`; `aria-current`
+   en el sheet "Más" de la barra móvil.
+
+### Desviaciones del plan (declaradas y auditadas por el revisor)
+
+- **Guard `paramChanged`** en el sincronizador, en vez de la invariante
+  literal del plan: la invariante literal revierte la vista optimista de
+  `navigate()` mientras el `router.push` no ha aterrizado (flicker). El guard
+  mantiene los 5 escenarios (deep-link en frío, back/forward, sin bucle,
+  canonicalización, navegación repetida) — verificado con simulación.
+- `platform.ts` exporta además `useIsMacPlatform()` con `useSyncExternalStore`
+  (en vez de `useState`+`useEffect`) → no hay que desactivar
+  `react-hooks/set-state-in-effect`.
+- `:focus-visible` dentro de `@layer base` (para que el ring de shadcn lo
+  sobrescriba sin perder visibilidad) y reduced-motion fuera, con `!important`.
+- La acción pendiente de la paleta se ejecuta en `onCloseAutoFocus` también
+  para "nueva transacción" y "atajos" (no solapar modales).
+- `transactions-view.tsx` conserva el toast `transactions.noTransactionsToExport`
+  (más específico que `common.noData`); sin filas → no se llama al helper.
+- Iconos de la barra móvil unificados con el registry (Home→LayoutDashboard,
+  PieChart→Target, FileUp→Download): cosmético, misma etiqueta i18n, mismo
+  destino y orden.
+
+### Avisos del revisor resueltos antes de cerrar
+
+| Aviso | Qué era | Resolución |
+|---|---|---|
+| **A1** | **Spec↔código**: la convención decía "los atajos se ignoran con el foco en un campo editable", pero `⌘K` **debe** funcionar ahí (estándar de editores) | **Spec corregida** (coordinador) en `AGENTS.md` §5 y `SDD.md` §5 con el carve-out explícito: única excepción `⌘K`/`Ctrl+K` (con un modal abierto sí se ignora) |
+| **A3** | `router.push` a la vista ya activa **duplicaba la entrada del historial** → el botón "atrás" no hacía nada visible | `use-view-navigation.ts`: si la vista ya es la activa → `router.replace` (sincroniza la URL sin añadir entrada); con vista distinta → `push`. Verificado con 4 asserts y simulación de back/forward |
+| **A4** | Las 2 `<table>` del diálogo de atajos **sin fila de cabecera** → columnas sin nombre accesible | `<thead>` + `<th scope="col">` + 2 claves i18n (`shortcuts.column.keys`/`shortcuts.column.action`) |
+| **A5** | `paletteKeywords` solo en inglés → en ES no se encontraban sinónimos en español | Alias ES añadidos (`reportes`, `informes`, `movimientos`, `presupuestos`, `ajustes`…) — son identificadores de búsqueda, no texto visible |
+| **A6** | Clave i18n muerta `palette.action.openTransaction` | Eliminada de es y en |
+
+A2 (flicker puntual con dos navegaciones muy rápidas), A7 (reduced-motion
+congela el `animate-spin` de los loaders), A8 (`ui/dialog.tsx` con "Close" en
+inglés y `bg-black/50`, preexistente y no editable), A9 (memoria) quedan
+documentados; A8 se anotó como deuda #24.
+
+### Verificación
+
+- **`bun run verify` exit 0** en los 6 pasos + verificación final del
+  coordinador (lint + typecheck + build + copia portable).
+- **Revisor: APRUEBA, 0 bloqueantes.** Auditó las 6 desviaciones declaradas
+  una por una, repitió la **sonda anti-drift** (SHA-256 de `views.ts`
+  idéntico antes/después, sin residuos) y verificó el CSS compilado (el
+  `:focus-visible` queda en `base` y la media query de reduced-motion
+  *unlayered* con `!important`).
+- **Greps:** `type ViewKey` → **1** (`views.ts`) · `setActiveView(` → solo
+  `view-route-sync.tsx` + `use-view-navigation.ts` · `useSearchParams` → solo
+  `view-route-sync.tsx` · `as any` nuevos → **0** · `bg-white|text-white|
+  text-gray-*` en lo tocado → **0** · HEX nuevos → **0** · `locale === 'es' ?`
+  → **0** · literales visibles en JSX → **0** · `console.*` → **0** ·
+  `package.json`/`bun.lock` **sin cambios** (0 deps nuevas).
+- **i18n:** **436 es / 436 en**, 0 faltantes, 0 sobrantes, 0 duplicados
+  (402 + 33 de U2 + 2 de A4 − 1 de A6).
+- **Intactos:** `prisma/schema.prisma`, `src/lib/auth/**`, `src/lib/db.ts`,
+  **todo** `src/app/api/**`, `finance.ts`, `src/components/ui/**`,
+  `package.json`, `bun.lock`, `next-env.d.ts` → doble entrada, net worth y
+  contrato v1 sin tocar. Ninguna `Transaction` creada o modificada.
+
+### Deuda que esta fase deja abierta
+
+- `src/components/ui/dialog.tsx`: "Close" en inglés (`sr-only`) y
+  `bg-black/50` en el overlay → **deuda #24** (preexistente, AGENTS.md §7
+  prohíbe editar la primitiva; requiere autorización del dueño).
+- `Alt+1..7` puede chocar con el cambio de pestaña de Chrome/Windows; con
+  dos navegaciones muy rápidas puede haber un flicker puntual (converge).
+- **Cero tests automatizados** — la lógica de U2 se verificó con harness +
+  sonda + humo manual + un test temporal fuera del repo (4 asserts sobre el
+  historial de `navigate()`). La red real llega en **10-U4 (Vitest)**, que es
+  el blocker del bloque de agentes (multi-tenant).
+- Deudas #16 (`text-white` en `ui/button.tsx`), #17 (`use-alerts.ts` sin
+  `localizedCategoryName`) y #18 (`apiFetch` sin genérico) siguen abiertas.
+- **Migración de colores en Turso**: el dueño ya la aprobó, pero falta la
+  `DATABASE_URL` (el `.env` local solo trae `NEXTAUTH_SECRET`; no hay Vercel
+  CLI ni `.vercel/` enlazado) → se ejecuta en cuanto Edwin la pegue.
+
+### Siguiente fase
+
+**10-U3** (undo + error boundary) y **10-U4** (drill-down + tests Vitest),
+pendientes de planificación. Después, el bloque de agentes (multi-tenant +
+endpoint OpenAI-compatible): Fase 0 (roadmap) → Fase 1 (capa de servicios) →
+tools + log auditable + undo → consola in-app → servidor MCP.

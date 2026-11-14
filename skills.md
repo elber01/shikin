@@ -214,7 +214,9 @@ cuando se expongan como tools.
 
 | Skill | Receta |
 |---|---|
-| `add_view` | `AGENTS.md` §6: crear `src/components/finzen/<vista>-view.tsx` → registrar en `VIEWS`/`ViewKey` → `NAV_ITEMS`/`MORE_ITEMS` → claves en `i18n.ts` (es+en) |
+| `add_view` | `AGENTS.md` §6: crear `src/components/finzen/<vista>-view.tsx` → **añadir la clave a `VIEW_KEYS` (`src/lib/finzen/views.ts`)** → registrar el componente en `VIEWS` (`app-shell.tsx`) y el icono/etiqueta en `VIEW_REGISTRY` (`view-registry.tsx`) → `MOBILE_PRIMARY`/`MOBILE_SECONDARY`/`MOBILE_MORE` → claves en `i18n.ts` (es+en). Los mapas son `Record<ViewKey, …>` → `tsc` **falla** si falta una vista (anti-drift). |
+| `view_deep_link` | `src/lib/finzen/views.ts` (`VIEW_KEYS`, `parseViewKey`) + `src/components/finzen/view-route-sync.tsx` (`useSearchParams` **dentro de un `<Suspense>`**) + `src/hooks/use-view-navigation.ts` (`navigate()`): toda vista es direccionable por `/?view=<key>`; el back/forward funciona porque cada cambio de vista hace `router.push`. Verificación: `bun run verify` + abrir `/?view=<key>` en el navegador. |
+| `keyboard_shortcuts` | `src/hooks/use-global-shortcuts.ts` + `src/components/finzen/command-palette.tsx` + `src/components/finzen/shortcuts-dialog.tsx`: atajos globales `⌘K`/`Ctrl+K` (paleta), `?` (ayuda), `Alt+1..7` (vista N), `Alt+N` (nueva transacción). Reglas: nunca disparar atajos con el foco en un campo editable ni con un modal abierto; la tabla de atajos se define en **una** constante compartida por el handler y el diálogo de ayuda. Verificación: `bun run verify` + recorrido manual por teclado. |
 | `add_endpoint_interno` | `getServerSession(authOptions)` + early return 401 sin `session.user.id` |
 | `add_endpoint_v1` | `authenticateV1Request` (`src/lib/auth/v1-api.ts`) + errores `{ success: false, error: snake_case }` |
 | `db_schema_change` | Editar `schema.prisma` → `bun run db:generate` → `bun run db:push` → sincronizar interfaces del store (frontera de tipos) |

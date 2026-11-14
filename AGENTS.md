@@ -111,6 +111,35 @@ verificación es la barrera de calidad mínima.
   techo es `text-xl`, `desde lg` si es `text-2xl`; `*:min-w-0` en el grid;
   montos con `break-words` (el dinero se envuelve, jamás ellipsis).
 
+### Deep-links, command palette y navegación por teclado (10-U2)
+- **Fuente de verdad de las vistas:** `src/lib/finzen/views.ts` → `VIEW_KEYS` +
+  `ViewKey`. **Nunca** redeclarar el union de vistas en otro fichero; el store
+  solo re-exporta el tipo. Los mapas de vistas (`VIEWS`, `VIEW_REGISTRY`) son
+  `Record<ViewKey, …>` → `tsc` falla si falta una vista.
+- **URL:** la vista se direcciona con `/?view=<viewKey>`; `view` ausente o
+  inválido → `dashboard`. Todo cambio de vista pasa por
+  `useViewNavigation().navigate()` (que hace `router.push`) → el back/forward
+  del navegador funciona. **Prohibido** llamar `setActiveView` desde un
+  componente.
+- **`useSearchParams()`** solo dentro de un límite `<Suspense>` (la ruta `/`
+  es prerenderizada estáticamente; sin el límite el build falla con
+  `missing-suspense-with-csr-bailout`).
+- **Paleta:** `src/components/finzen/command-palette.tsx` compone
+  `ui/dialog.tsx` + `ui/command.tsx` **sin editarlos**. `cmdk` ya está
+  instalado: **cero dependencias nuevas** (nada de `react-hotkeys`,
+  `downshift`…). El `aria-label` del listbox y el nombre accesible del input
+  van **siempre** en i18n (el default de cmdk es "Suggestions", en inglés).
+- **Atajos globales:** `⌘K`/`Ctrl+K` (paleta) · `?` (ayuda) · `Alt+1..7`
+  (vista N) · `Alt+N` (nueva transacción). Se ignoran con el foco en un campo
+  editable o con un modal abierto, **única excepción: `⌘K`/`Ctrl+K`**, que
+  también funciona con el foco en un campo editable (comportamiento estándar
+  de los editores; con un modal abierto sí se ignora). `Esc`/`Tab` los aporta
+  Radix (`FocusScope trapped`) — no reimplementarlos. La tabla de atajos vive
+  en **una** constante compartida por el handler y el diálogo de ayuda.
+- **Foco:** el cierre de la paleta restaura el foco al botón trigger
+  (`onCloseAutoFocus`); si la acción pendiente abre otro diálogo, ese diálogo
+  gestiona su propio foco.
+
 ### React Compiler (importante)
 El ESLint usa React Compiler. Los `useMemo` cuyas dependencias derivan de
 `new Date()` (impuro) no se pueden preservar y generan el error
@@ -158,9 +187,17 @@ src/components/finzen/ui/   # design system propio (stat-card, empty-state, icon
 src/components/ui/          # primitivas shadcn/ui (no editar salvo wrapper)
 src/components/auth/        # formulario de login/registro
 src/hooks/use-alerts.ts     # motor de alertas (presupuesto, spikes, forecast)
+src/hooks/use-view-navigation.ts    # navigate(view) — único camino de navegación
+src/hooks/use-global-shortcuts.ts   # atajos globales
 src/lib/finzen/             # dominio: currency, finance, i18n, ocr, date-utils
+src/lib/finzen/views.ts     # contrato de vistas (ViewKey, VIEW_KEYS, parseViewKey)
+src/lib/finzen/platform.ts  # detección de plataforma (badge ⌘K / Ctrl+K)
 src/lib/auth/               # authOptions, api-key, verificación v1
 src/store/finzen-store.ts   # estado global (Zustand) — ver §4
+src/components/finzen/view-registry.tsx   # iconos + claves i18n de cada vista
+src/components/finzen/view-route-sync.tsx  # URL (?view=) ↔ store
+src/components/finzen/command-palette.tsx  # command palette (cmdk)
+src/components/finzen/shortcuts-dialog.tsx # ayuda de atajos
 src/types/next-auth.d.ts    # augmentación de tipos de NextAuth
 scripts/                    # utilidades de BD/keys (ESM, se corren con bun)
 db/                         # SQLite local de dev + schema.sql
@@ -168,9 +205,15 @@ db/                         # SQLite local de dev + schema.sql
 
 ### Añadir una vista nueva
 1. Crear `src/components/finzen/<vista>-view.tsx`.
-2. Registrarla en `VIEWS` de `app-shell.tsx` y en `ViewKey` del store.
-3. Añadirla a `NAV_ITEMS` (sidebar) y/o `MORE_ITEMS` (móvil).
-4. Añadir sus claves a `i18n.ts` (es + en).
+2. Añadir la clave a `VIEW_KEYS` (`src/lib/finzen/views.ts`).
+3. Registrarla en `VIEWS` de `app-shell.tsx` y su icono/etiqueta en
+   `VIEW_REGISTRY` (`view-registry.tsx`).
+4. Añadirla a `MOBILE_PRIMARY`/`MOBILE_SECONDARY`/`MOBILE_MORE`
+   (`bottom-tab-bar.tsx`).
+5. Añadir sus claves a `i18n.ts` (es + en).
+
+> Los mapas de vistas son `Record<ViewKey, …>` → `tsc` **falla** si falta una
+> vista (anti-drift). No redeclares el union `ViewKey` fuera de `views.ts`.
 
 ### Añadir un endpoint API
 - Interno: `getServerSession(authOptions)` + early return 401 si no hay

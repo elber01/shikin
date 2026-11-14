@@ -203,6 +203,26 @@
     font-feature-settings: 'cv11', 'ss03', 'tnum';
   }
   .tnum { font-variant-numeric: tabular-nums; }
+  /* [10-U2] Foco visible: anillo semántico con el token `--ring`.
+     Vive en `base` para que las utilidades de Tailwind puedan sobrescribirlo
+     (p. ej. `focus-visible:outline-none` + `focus-visible:ring-2`). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* [10-U2] Reduced motion: si el sistema pide menos movimiento, se anulan
+   animaciones, transiciones y el scroll suave. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Custom scrollbar */
