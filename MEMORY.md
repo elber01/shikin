@@ -87,6 +87,8 @@
 
 **✅ 10-U3 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `e95c9ab` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `OyfVzV_GhlmJsZfBn6qDg`; `/login` y `/` → 200). Working tree limpio. 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
 
+**✅ 10-U4 COMMITEADA Y PUSHEADA (15-nov-2026):** commit `6de1007` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `dUTSw_YTmKneIWj95rlL0`; `/login` y `/` → 200). Working tree limpio. 10-U3 = `e95c9ab` · 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
+
 Sesión 15-nov-2026 (10-U4 — drill-down + Vitest; flujo coordinador→planificador→implementador→revisor; **3 revisiones**, todas **APRUEBA**, 0 bloqueantes; cierra el bloque UI U0→U4):
 - **Alcance:** 8 pasos atómicos (spec → infra Vitest → P0 tests undo → P1 dominio puro → núcleo puro del drill-down → cableado → superficies → P2/P3). Deja lista la **red de tests** que desbloquea el bloque de agentes.
 - **Spec primero (coordinador):** `SDD.md` §1 (viñeta "Filtros y drill-down (10-U4)"), §2 (nota U4: `/api/v1/*` intacto), §5 **convención 10** (drill-down y filtros en URL), §6 (Fase 0 con Vitest adelantado), §7.1 (deuda "cero tests" → parcialmente resuelta); `skills.md` §1/§3 (verificaciones Vitest), §6 (recetas `transaction_drilldown`, `unit_test`, `verify_quality` → lint+typecheck+test+build, `view_deep_link` → canonicalización preserva params); `AGENTS.md` §3 (`bun run test`), §5 (dos subsecciones nuevas), §6 (mapa), §7 (prohibido tests contra `db/custom.db`/Turso). `agents/orchestrator.md` **sin cambios** (`git diff --exit-code` ⇒ 0).

@@ -6943,6 +6943,8 @@ consola in-app → servidor MCP.
 **Owner:** Edwin (aprobación: "Adelante — plan completo", 15-nov-2026)
 **Status:** ✅ Cerrado — revisor APRUEBA (3 revisiones), 0 bloqueantes, `bun run verify` exit 0
 **Base:** `7a439cd` (cierre de docs de 10-U3)
+**Commit:** `6de1007` — pusheado a `main` el 15-nov-2026 (working tree limpio)
+**Deploy:** automático en Vercel, build id `dUTSw_YTmKneIWj95rlL0` (`/login` y `/` → 200)
 
 ### Objetivo
 
