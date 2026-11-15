@@ -140,6 +140,39 @@ verificación es la barrera de calidad mínima.
   (`onCloseAutoFocus`); si la acción pendiente abre otro diálogo, ese diálogo
   gestiona su propio foco.
 
+### Undo y error boundaries (10-U3)
+- **Snapshot solo en memoria:** nunca `localStorage`/`sessionStorage` (son
+  descripciones y nombres financieros). Recargar, cerrar la pestaña o cerrar
+  sesión **descarta** el undo.
+- **Recibo firmado obligatorio:** cada DELETE emite un recibo HMAC-SHA256
+  (clave derivada de `NEXTAUTH_SECRET` con contexto de dominio) que ata
+  `userId` + `kind` + `id` + hash del snapshot. `POST /api/undo` lo valida
+  **antes de escribir**: sin recibo válido no hay restauración. El snapshot
+  viene del cliente → **nunca** se confía en él (ni en su `userId`, ni en su
+  `isSystem`, ni en que "existió"): el recibo es la prueba de propiedad.
+- **Ownership estricto:** una categoría solo es restaurable si es del usuario
+  de la sesión o es del sistema global (`userId: null` **y** `isSystem: true`).
+  `isSystem: true` con `userId` de otra persona **no** autoriza. Un snapshot
+  de categoría con `isSystem !== false` se rechaza.
+- **Un solo undo pendiente**, no una pila: una eliminación nueva lo reemplaza
+  (y descarta el toast anterior con `toast.dismiss`).
+- **Restaurar con servicio** (`src/lib/services/undo-service.ts`); el route
+  handler (`src/app/api/undo/route.ts`) es un adaptador delgado con
+  `getServerSession`. El `userId` sale **siempre** de la sesión, nunca del
+  snapshot.
+- **Preservar ID y campos de negocio** al restaurar; **nunca** fabricar filas de
+  cuenta virtual `x_<categoryId>` (es una convención de string). Si falta una
+  dependencia → `409 undo_dependency_missing`, sin escritura parcial.
+- **Importación masiva = todo o nada:** si una fila del lote cambió, se aborta
+  el lote entero (`409 undo_batch_conflict`) y no se borra ninguna fila.
+- **Todo texto visible en `i18n.ts`** (es + en). Toast de Sonner (región
+  `aria-live="polite"`) para el undo; fallback de error con `role="alert"`.
+- **Los errores de acciones del usuario → toast**, nunca pantalla completa.
+  Los boundaries (`app/error.tsx`, `app/global-error.tsx` y
+  `view-error-boundary.tsx`) solo contienen errores de render/lifecycle.
+- **Logging saneado:** solo tipo, digest y stack. **Nunca** emails,
+  descripciones, nombres de cuenta, API keys, headers ni snapshots de undo.
+
 ### React Compiler (importante)
 El ESLint usa React Compiler. Los `useMemo` cuyas dependencias derivan de
 `new Date()` (impuro) no se pueden preservar y generan el error
@@ -189,6 +222,13 @@ src/components/auth/        # formulario de login/registro
 src/hooks/use-alerts.ts     # motor de alertas (presupuesto, spikes, forecast)
 src/hooks/use-view-navigation.ts    # navigate(view) — único camino de navegación
 src/hooks/use-global-shortcuts.ts   # atajos globales
+src/hooks/use-undo.ts               # snapshot en memoria + toast + refresh
+src/lib/finzen/undo.ts              # DTOs compartidos de undo (snapshot, comando, códigos)
+src/lib/services/undo-service.ts    # restore idempotente + undo de lote importado
+src/lib/finzen/error-report.ts      # reportero saneado de errores (sin datos personales)
+src/components/finzen/view-error-boundary.tsx  # boundary de render de las vistas
+src/app/error.tsx                   # boundary de ruta (Next)
+src/app/global-error.tsx            # boundary global (autocontenido)
 src/lib/finzen/             # dominio: currency, finance, i18n, ocr, date-utils
 src/lib/finzen/views.ts     # contrato de vistas (ViewKey, VIEW_KEYS, parseViewKey)
 src/lib/finzen/platform.ts  # detección de plataforma (badge ⌘K / Ctrl+K)

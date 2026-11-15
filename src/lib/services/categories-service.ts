@@ -23,6 +23,8 @@
 import type { Category } from '@prisma/client';
 import { db } from '@/lib/db';
 import { normalizeCategoryColor } from '@/lib/finzen/category-color';
+import type { CategoryUndoSnapshot } from '@/lib/finzen/undo';
+import { issueUndoReceipt } from '@/lib/services/undo-receipt';
 
 export type CategoryErrorCode =
   | 'name_required'
@@ -36,7 +38,7 @@ export type CategoryMutationResult =
   | { ok: false; code: CategoryErrorCode; message: string };
 
 export type CategoryDeleteResult =
-  | { ok: true; id: string }
+  | { ok: true; id: string; deleted: CategoryUndoSnapshot; undoReceipt: string }
   | {
       ok: false;
       code: CategoryErrorCode;
@@ -204,7 +206,21 @@ export async function deleteCategoryForUser(
     };
   }
 
+  const deleted: CategoryUndoSnapshot = {
+    id: existing.id,
+    name: existing.name,
+    nameEs: existing.nameEs,
+    nameEn: existing.nameEn,
+    icon: existing.icon,
+    color: existing.color,
+    direction: existing.direction,
+    isSystem: existing.isSystem,
+    sortOrder: existing.sortOrder,
+  };
+
+  const undoReceipt = issueUndoReceipt(userId, 'category', id, deleted);
+
   await db.category.delete({ where: { id } });
 
-  return { ok: true, id };
+  return { ok: true, id, deleted, undoReceipt };
 }

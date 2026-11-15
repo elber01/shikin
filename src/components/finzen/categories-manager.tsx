@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Pencil, Trash2, Lock } from 'lucide-react';
-import { useFinZenStore } from '@/store/finzen-store';
+import { ApiError, useFinZenStore } from '@/store/finzen-store';
 import { translations, type TranslationKey } from '@/lib/finzen/i18n';
 import { localizedCategoryName } from '@/lib/finzen/localize';
 import {
@@ -21,6 +21,7 @@ import { IconButton } from '@/components/finzen/ui/icon-button';
 import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
 import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
 import { CategoryIcon } from '@/components/finzen/ui/category-icon';
+import { useUndo } from '@/hooks/use-undo';
 
 const ICON_OPTIONS = ['📦', '🍔', '🏠', '🚇', '🎬', '⚡', '🏥', '🛍️', '💼', '📈', '💻', '↩️', '₿', '💰', '🎓', '✈️', '📱', '🐕', '🍷', '💡'];
 const COLOR_OPTIONS = CATEGORY_COLOR_KEYS;
@@ -49,6 +50,7 @@ const COLOR_LABEL_KEYS: Record<CategoryColorKey, TranslationKey> = {
 export function CategoriesManager() {
   const { categories, locale, addCategory, updateCategory, deleteCategory } = useFinZenStore();
   const t = translations[locale];
+  const { offerUndo } = useUndo();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -79,8 +81,39 @@ export function CategoriesManager() {
   }
 
   async function handleDelete(id: string) {
-    try { await deleteCategory(id); toast.success(t['categories.deleted']); }
-    catch (err) { toast.error(String(err).replace('Error: ', '')); }
+    try {
+      const { snapshot, undoReceipt } = await deleteCategory(id);
+      offerUndo(
+        { kind: 'category', snapshot, receipt: undoReceipt },
+        t['undo.deleted.category']
+      );
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === 'category_has_transactions') {
+          toast.error(
+            t['categories.errorHasTransactions'].replace(
+              '{n}',
+              String(err.transactionCount ?? 0)
+            )
+          );
+          return;
+        }
+        if (err.code === 'category_in_budget') {
+          toast.error(
+            t['categories.errorInBudget'].replace(
+              '{n}',
+              String(err.transactionCount ?? 0)
+            )
+          );
+          return;
+        }
+        if (err.code === 'system_category_not_deletable') {
+          toast.error(t['categories.errorSystemNotDeletable']);
+          return;
+        }
+      }
+      toast.error(t['categories.deleteFailed']);
+    }
   }
 
   const expenseCats = categories.filter(c => c.direction === 'expense');

@@ -20,6 +20,8 @@ import { OcrFlow } from '@/components/finzen/ocr-flow';
 import { BankImportFlow } from '@/components/finzen/bank-import-flow';
 import { EmptyState } from '@/components/finzen/ui/empty-state';
 import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
+import { useUndo } from '@/hooks/use-undo';
+import type { ImportBatchUndoSnapshot } from '@/lib/finzen/undo';
 
 type Step = 'upload' | 'mapping' | 'done';
 
@@ -27,6 +29,7 @@ export function ImportView() {
   const store = useFinZenStore();
   const { locale, accounts, categories, baseCurrency } = store;
   const t = translations[locale];
+  const { offerUndo } = useUndo();
   const [step, setStep] = useState<Step>('upload');
   const [importOpen, setImportOpen] = useState(false);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -80,6 +83,7 @@ export function ImportView() {
     if (!targetAccountId) { toast.error(t['common.selectAccount']); return; }
     let imported = 0, skipped = 0, duplicates = 0, uncategorized = 0;
     const importBatchId = `csv_${Date.now()}`;
+    const importedRows: ImportBatchUndoSnapshot['transactions'] = [];
     // Build a set of existing transactions for duplicate detection
     const existingTxKeys = new Set<string>();
     store.transactions.forEach(tx => {
@@ -115,7 +119,13 @@ export function ImportView() {
         }
       }
       try {
-        await store.addTransaction({ type, amount, currency: baseCurrency as CurrencyCode, fromAccountId: type === 'income' ? `x_${categoryId}` : targetAccountId, toAccountId: type === 'expense' ? `x_${categoryId}` : targetAccountId, categoryId, description: desc, occurredOn: toStorageISOString(d), tags: [importBatchId], importSource: 'csv' });
+        const created = await store.addTransaction({ type, amount, currency: baseCurrency as CurrencyCode, fromAccountId: type === 'income' ? `x_${categoryId}` : targetAccountId, toAccountId: type === 'expense' ? `x_${categoryId}` : targetAccountId, categoryId, description: desc, occurredOn: toStorageISOString(d), tags: [importBatchId], importSource: 'csv' });
+        importedRows.push({
+          id: created.id,
+          updatedAt: created.updatedAt,
+          tags: created.tags,
+          importSource: 'csv',
+        });
         imported++;
       } catch { skipped++; }
     }
@@ -124,7 +134,24 @@ export function ImportView() {
     if (duplicates > 0) msg += t['import.duplicatesSkipped'].replace('{n}', String(duplicates));
     if (uncategorized > 0) msg += t['import.uncategorized'].replace('{n}', String(uncategorized));
     if (skipped > 0) msg += t['import.invalid'].replace('{n}', String(skipped));
-    toast.success(msg);
+    if (importedRows.length > 0) {
+      const snapshot: ImportBatchUndoSnapshot = {
+        batchId: importBatchId,
+        transactions: importedRows,
+      };
+      try {
+        const receipt = await store.issueImportBatchUndoReceipt(snapshot);
+        offerUndo(
+          { kind: 'import_batch', snapshot, receipt },
+          msg
+        );
+      } catch {
+        // Sin recibo válido del servidor no se ofrece deshacer.
+        toast.success(msg);
+      }
+    } else {
+      toast.success(msg);
+    }
   }
 
   function exportData(format: 'csv' | 'json') {

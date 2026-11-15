@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
 import { db } from '@/lib/db';
+import { deleteTransactionForUser } from '@/lib/services/transactions-service';
 
 export async function PATCH(
   req: Request,
@@ -54,17 +55,17 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const existing = await db.transaction.findFirst({
-    where: { id, userId: session.user.id },
-  });
-
-  if (!existing) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const result = await deleteTransactionForUser(session.user.id, id);
+  if (!result.ok) {
+    if (result.code === 'not_found') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json({ error: result.message }, { status: 422 });
   }
 
-  await db.transaction.delete({
-    where: { id },
+  return NextResponse.json({
+    success: true,
+    deleted: result.deleted,
+    undoReceipt: result.undoReceipt,
   });
-
-  return NextResponse.json({ success: true });
 }

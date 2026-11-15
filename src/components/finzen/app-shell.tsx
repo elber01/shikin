@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { translations } from '@/lib/finzen/i18n';
 import type { ViewKey } from '@/lib/finzen/views';
+import { ViewErrorBoundary } from '@/components/finzen/view-error-boundary';
 
 // `Record<ViewKey, …>` → `tsc` falla si falta una vista (anti-drift 10-U2).
 const VIEWS: Record<ViewKey, ComponentType> = {
@@ -82,9 +83,11 @@ export function AppShell() {
         )}
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-          <ViewTransition key={activeView}>
-            <ActiveView />
-          </ViewTransition>
+          <ViewErrorBoundary key={activeView}>
+            <ViewTransition key={activeView}>
+              <ActiveView />
+            </ViewTransition>
+          </ViewErrorBoundary>
         </div>
       </main>
 

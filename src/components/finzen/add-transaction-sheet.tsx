@@ -29,6 +29,7 @@ import { localizedCategoryName } from '@/lib/finzen/localize';
 import type { TransactionType } from '@/store/finzen-store';
 import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
 import { CurrencySelect } from '@/components/finzen/ui/currency-select';
+import { useUndo } from '@/hooks/use-undo';
 
 type TxType = 'expense' | 'income' | 'transfer';
 
@@ -47,6 +48,7 @@ export function AddTransactionSheet() {
     locale,
   } = useFinZenStore();
   const t = translations[locale];
+  const { offerUndo } = useUndo();
 
   const isEditMode = editingTransactionId !== null;
   const editingTx = editingTransactionId
@@ -247,38 +249,13 @@ export function AddTransactionSheet() {
 
   async function handleDelete() {
     if (!editingTransactionId) return;
-    // [UX fix] Capturar ANTES de borrar: forceClose() limpia editingTransactionId
-    // y el toast de deshacer necesita los datos originales.
-    const tx = editingTx;
     try {
-      await deleteTransaction(editingTransactionId);
-      toast.success(t['tx.deleted'], {
-        action: {
-          label: t['tx.undo'],
-          onClick: async () => {
-            if (!tx) return;
-            try {
-              await addTransaction({
-                type: tx.type as TransactionType,
-                amount: tx.amount,
-                currency: tx.currency as CurrencyCode,
-                fromAccountId: tx.fromAccountId,
-                toAccountId: tx.toAccountId,
-                categoryId: tx.categoryId ?? undefined,
-                description: tx.description ?? '',
-                occurredOn: tx.occurredOn,
-                tags: tx.tags || '',
-                importSource: 'manual' as const,
-              });
-              toast.success(t['tx.restored']);
-            } catch {
-              toast.error(t['tx.restoreFailed']);
-            }
-          },
-        },
-        duration: 6000,
-      });
-    } catch (err) {
+      const { snapshot, undoReceipt } = await deleteTransaction(editingTransactionId);
+      offerUndo(
+        { kind: 'transaction', snapshot, receipt: undoReceipt },
+        t['undo.deleted.transaction']
+      );
+    } catch {
       // [P0-2 fix] En error: NO cerrar — mostrar el fallo y mantener contexto
       toast.error(t['tx.deleteFailed']);
       return;

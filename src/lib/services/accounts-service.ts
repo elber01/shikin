@@ -19,6 +19,9 @@
 
 import type { Account } from '@prisma/client';
 import { db } from '@/lib/db';
+import type { CurrencyCode } from '@/lib/finzen/currency';
+import type { AccountUndoSnapshot } from '@/lib/finzen/undo';
+import { issueUndoReceipt } from '@/lib/services/undo-receipt';
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -72,7 +75,7 @@ export type AccountMutationResult =
   | { ok: false; code: AccountErrorCode; message: string };
 
 export type DeleteAccountResult =
-  | { ok: true; id: string }
+  | { ok: true; id: string; deleted: AccountUndoSnapshot; undoReceipt: string }
   | {
       ok: false;
       code: 'not_found' | 'account_has_transactions';
@@ -377,7 +380,7 @@ export async function deleteAccountForUser(
   id: string
 ): Promise<DeleteAccountResult> {
   // 1. Ownership
-  const existing = await db.account.findFirst({ where: { id, userId }, select: { id: true } });
+  const existing = await db.account.findFirst({ where: { id, userId } });
   if (!existing) {
     return { ok: false, code: 'not_found', message: 'Account not found or not owned by your user' };
   }
@@ -395,7 +398,20 @@ export async function deleteAccountForUser(
     };
   }
 
-  // 3. Safe to delete
+  // 3. Capture the authoritative snapshot before the physical delete.
+  const deleted: AccountUndoSnapshot = {
+    id: existing.id,
+    name: existing.name,
+    accountType: existing.accountType,
+    subType: existing.subType,
+    currency: existing.currency as CurrencyCode,
+    currentBalance: existing.currentBalance,
+    institution: existing.institution,
+    lastFour: existing.lastFour,
+  };
+
+  const undoReceipt = issueUndoReceipt(userId, 'account', existing.id, deleted);
+
   await db.account.delete({ where: { id: existing.id } });
-  return { ok: true, id: existing.id };
+  return { ok: true, id: existing.id, deleted, undoReceipt };
 }

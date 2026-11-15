@@ -25,7 +25,7 @@ export function Sidebar() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const { data: session } = useSession();
-  const { activeView, sidebarCollapsed, toggleSidebar, locale, setLocale, commandPaletteOpen, setCommandPaletteOpen } =
+  const { activeView, sidebarCollapsed, toggleSidebar, locale, setLocale, commandPaletteOpen, setCommandPaletteOpen, resetStore } =
     useFinZenStore();
   const navigate = useViewNavigation();
   const isMac = useIsMacPlatform();
@@ -186,7 +186,10 @@ export function Sidebar() {
         </button>
 
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => {
+            resetStore();
+            void signOut({ callbackUrl: '/login' });
+          }}
           className={cn(
             'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-expense-soft hover:text-expense transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface',

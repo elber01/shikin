@@ -8,6 +8,8 @@
  */
 
 import { db } from '@/lib/db';
+import type { BudgetItemUndoSnapshot } from '@/lib/finzen/undo';
+import { issueUndoReceipt } from '@/lib/services/undo-receipt';
 
 export type BudgetItemErrorCode = 'not_found' | 'invalid_category' | 'invalid_amount';
 
@@ -36,6 +38,15 @@ export interface BudgetItemPublic {
 export type AddBudgetItemResult =
   | { ok: true; item: BudgetItemPublic }
   | { ok: false; code: BudgetItemErrorCode; message: string };
+
+export type DeleteBudgetItemResult =
+  | { ok: true; deleted: BudgetItemUndoSnapshot; undoReceipt: string }
+  | {
+      ok: false;
+      code: 'not_found';
+      message: string;
+      resource: 'budget' | 'item';
+    };
 
 export interface AddBudgetItemInput {
   categoryId: string;
@@ -123,4 +134,53 @@ export async function addBudgetItemForUser(
       },
     },
   };
+}
+
+/**
+ * Elimina una partida de un presupuesto propio y devuelve el snapshot que
+ * permite restaurarla con su ID original.
+ */
+export async function deleteBudgetItemForUser(
+  userId: string,
+  budgetId: string,
+  itemId: string
+): Promise<DeleteBudgetItemResult> {
+  const budget = await db.budget.findFirst({
+    where: { id: budgetId, userId },
+    select: { id: true },
+  });
+  if (!budget) {
+    return {
+      ok: false,
+      code: 'not_found',
+      message: 'Budget not found or not owned by your user',
+      resource: 'budget',
+    };
+  }
+
+  const item = await db.budgetItem.findFirst({
+    where: { id: itemId, budgetId },
+  });
+  if (!item) {
+    return {
+      ok: false,
+      code: 'not_found',
+      message: 'Budget item not found',
+      resource: 'item',
+    };
+  }
+
+  const deleted: BudgetItemUndoSnapshot = {
+    id: item.id,
+    budgetId: item.budgetId,
+    categoryId: item.categoryId,
+    plannedAmount: item.plannedAmount,
+    alertThresholdPct: item.alertThresholdPct,
+  };
+
+  const undoReceipt = issueUndoReceipt(userId, 'budget_item', item.id, deleted);
+
+  await db.budgetItem.delete({ where: { id: item.id } });
+
+  return { ok: true, deleted, undoReceipt };
 }

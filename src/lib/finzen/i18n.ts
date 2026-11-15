@@ -224,7 +224,9 @@ const es = {
   'accounts.debt': 'Deuda',
   'accounts.deleteFailed': 'No se pudo eliminar: {message}',
   'budgets.deleteTitle': '¿Eliminar partida?',
-  'budgets.deleteBody': 'No se puede deshacer.',
+  'budgets.deleteBody': 'Podrás deshacer esta eliminación durante 10 segundos.',
+  'budgets.deleteFailed': 'No se pudo eliminar la partida.',
+  'budgets.operationFailed': 'No se pudo completar la operación.',
   'budgets.cancel': 'Cancelar',
   'budgets.delete': 'Eliminar',
   'budgets.editItem': 'Editar partida',
@@ -339,7 +341,7 @@ const es = {
   'categories.system': 'Sistema',
   'categories.deleteTitle': '¿Eliminar categoría?',
   'categories.deleteBody':
-    'No se puede deshacer. Si tiene transacciones asociadas, no se podrá eliminar.',
+    'Podrás deshacer esta eliminación durante 10 segundos. Si tiene transacciones o partidas asociadas, no se podrá eliminar.',
   'categories.created': 'Categoría creada',
   'categories.updated': 'Categoría actualizada',
   'categories.deleted': 'Categoría eliminada',
@@ -409,7 +411,7 @@ const es = {
   'tx.receiptSoon': 'Carga de recibo — próximamente',
   'tx.deleteTitle': '¿Eliminar transacción?',
   'tx.deleteBody':
-    'Esta acción no se puede deshacer. La transacción se eliminará permanentemente.',
+    'Podrás deshacer esta eliminación durante 10 segundos.',
   'tx.invalidAmount': 'Monto inválido',
   'tx.selectSourceAccount': 'Selecciona la cuenta de origen',
   'tx.selectIncomeCategory': 'Selecciona la categoría de ingreso',
@@ -453,6 +455,47 @@ const es = {
     'Los atajos globales se ignoran mientras hay un modal abierto.',
   'shortcuts.column.keys': 'Atajo',
   'shortcuts.column.action': 'Acción',
+  // [10-U3] Undo y límites de error
+  'undo.action': 'Deshacer',
+  'undo.windowHint': 'Tienes 10 segundos para deshacer.',
+  'undo.deleted.transaction': 'Transacción eliminada',
+  'undo.deleted.account': 'Cuenta eliminada',
+  'undo.deleted.category': 'Categoría eliminada',
+  'undo.deleted.budgetItem': 'Partida eliminada',
+  'undo.deleted.importBatch': 'Importación eliminada',
+  'undo.restored': 'Elemento restaurado',
+  'undo.expired': 'El periodo para deshacer ha terminado',
+  'undo.syncFailed':
+    'No se pudo sincronizar la restauración. Puedes volver a intentarlo.',
+  'undo.error.unauthorized': 'La sesión no permite deshacer esta acción.',
+  'undo.error.invalid_undo_payload': 'La acción de deshacer no es válida.',
+  'undo.error.not_found': 'No se encontró el elemento que se intentaba restaurar.',
+  'undo.error.invalid_transaction':
+    'La transacción no conserva un asiento contable válido.',
+  'undo.error.invalid_account': 'Los datos de la cuenta no son válidos.',
+  'undo.error.invalid_category': 'Los datos de la categoría no son válidos.',
+  'undo.error.invalid_budget_item': 'Los datos de la partida no son válidos.',
+  'undo.error.undo_batch_too_large':
+    'La importación es demasiado grande para deshacer.',
+  'undo.error.undo_conflict':
+    'El elemento cambió y no se puede restaurar.',
+  'undo.error.undo_dependency_missing':
+    'Falta una dependencia necesaria para restaurar el elemento.',
+  'undo.error.undo_batch_conflict':
+    'Alguna fila de la importación cambió; no se deshizo nada.',
+  'undo.error.undo_failed': 'No se pudo deshacer la acción.',
+  'categories.errorHasTransactions':
+    'No se puede eliminar: {n} transacciones usan esta categoría.',
+  'categories.errorInBudget':
+    'No se puede eliminar: {n} partidas de presupuesto usan esta categoría.',
+  'categories.errorSystemNotDeletable':
+    'No se puede eliminar una categoría del sistema.',
+  'categories.deleteFailed': 'No se pudo eliminar la categoría.',
+  'errorBoundary.title': 'Algo no salió bien',
+  'errorBoundary.description':
+    'No pudimos mostrar esta vista. Tus datos siguen a salvo.',
+  'errorBoundary.retry': 'Reintentar',
+  'errorBoundary.dashboard': 'Ir al panel',
 } satisfies Record<string, string>;
 
 export type TranslationKey = keyof typeof es;
@@ -681,7 +724,9 @@ const en: Record<TranslationKey, string> = {
   'accounts.debt': 'Debt',
   'accounts.deleteFailed': 'Could not delete: {message}',
   'budgets.deleteTitle': 'Delete budget item?',
-  'budgets.deleteBody': 'Cannot be undone.',
+  'budgets.deleteBody': 'You can undo this deletion for 10 seconds.',
+  'budgets.deleteFailed': 'The budget item could not be deleted.',
+  'budgets.operationFailed': 'The operation could not be completed.',
   'budgets.cancel': 'Cancel',
   'budgets.delete': 'Delete',
   'budgets.editItem': 'Edit budget item',
@@ -795,7 +840,7 @@ const en: Record<TranslationKey, string> = {
   'categories.system': 'System',
   'categories.deleteTitle': 'Delete category?',
   'categories.deleteBody':
-    'Cannot undo. If transactions use it, deletion will be blocked.',
+    'You can undo this deletion for 10 seconds. Transactions or budget items still using it will block deletion.',
   'categories.created': 'Category created',
   'categories.updated': 'Category updated',
   'categories.deleted': 'Category deleted',
@@ -864,8 +909,7 @@ const en: Record<TranslationKey, string> = {
   'tx.categorySource': 'Category (source)',
   'tx.receiptSoon': 'Receipt upload — coming soon',
   'tx.deleteTitle': 'Delete transaction?',
-  'tx.deleteBody':
-    'This action cannot be undone. The transaction will be permanently deleted.',
+  'tx.deleteBody': 'You can undo this deletion for 10 seconds.',
   'tx.invalidAmount': 'Invalid amount',
   'tx.selectSourceAccount': 'Select the source account',
   'tx.selectIncomeCategory': 'Select the income category',
@@ -908,6 +952,44 @@ const en: Record<TranslationKey, string> = {
   'shortcuts.close': 'Global shortcuts are ignored while a modal is open.',
   'shortcuts.column.keys': 'Shortcut',
   'shortcuts.column.action': 'Action',
+  // [10-U3] Undo and error boundaries
+  'undo.action': 'Undo',
+  'undo.windowHint': 'You have 10 seconds to undo.',
+  'undo.deleted.transaction': 'Transaction deleted',
+  'undo.deleted.account': 'Account deleted',
+  'undo.deleted.category': 'Category deleted',
+  'undo.deleted.budgetItem': 'Budget item deleted',
+  'undo.deleted.importBatch': 'Import deleted',
+  'undo.restored': 'Item restored',
+  'undo.expired': 'The undo period has ended',
+  'undo.syncFailed': 'The restoration could not be synchronized. You can try again.',
+  'undo.error.unauthorized': 'This session cannot undo the action.',
+  'undo.error.invalid_undo_payload': 'The undo action is not valid.',
+  'undo.error.not_found': 'The item to restore could not be found.',
+  'undo.error.invalid_transaction':
+    'The transaction does not contain a valid double-entry record.',
+  'undo.error.invalid_account': 'The account data is not valid.',
+  'undo.error.invalid_category': 'The category data is not valid.',
+  'undo.error.invalid_budget_item': 'The budget item data is not valid.',
+  'undo.error.undo_batch_too_large': 'The import is too large to undo.',
+  'undo.error.undo_conflict': 'The item changed and cannot be restored.',
+  'undo.error.undo_dependency_missing':
+    'A dependency needed to restore the item is missing.',
+  'undo.error.undo_batch_conflict':
+    'A row in the import changed; nothing was undone.',
+  'undo.error.undo_failed': 'The action could not be undone.',
+  'categories.errorHasTransactions':
+    'Cannot delete: {n} transactions use this category.',
+  'categories.errorInBudget':
+    'Cannot delete: {n} budget items use this category.',
+  'categories.errorSystemNotDeletable':
+    'A system category cannot be deleted.',
+  'categories.deleteFailed': 'The category could not be deleted.',
+  'errorBoundary.title': 'Something went wrong',
+  'errorBoundary.description':
+    'We could not display this view. Your data is still safe.',
+  'errorBoundary.retry': 'Try again',
+  'errorBoundary.dashboard': 'Go to dashboard',
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

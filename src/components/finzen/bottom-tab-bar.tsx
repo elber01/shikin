@@ -25,7 +25,7 @@ import { useViewNavigation } from '@/hooks/use-view-navigation';
 const MORE_VIEWS: readonly ViewKey[] = MOBILE_MORE;
 
 export function BottomTabBar() {
-  const { activeView, setAddSheetOpen, locale } = useFinZenStore();
+  const { activeView, setAddSheetOpen, locale, resetStore } = useFinZenStore();
   const [moreOpen, setMoreOpen] = useState(false);
   const navigate = useViewNavigation();
   const t = translations[locale];
@@ -142,7 +142,8 @@ export function BottomTabBar() {
           <button
             onClick={() => {
               setMoreOpen(false);
-              signOut({ callbackUrl: '/login' });
+              resetStore();
+              void signOut({ callbackUrl: '/login' });
             }}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium text-expense hover:bg-expense-soft transition-colors active:scale-[0.98]"
           >

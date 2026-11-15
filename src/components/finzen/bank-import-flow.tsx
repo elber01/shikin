@@ -18,6 +18,8 @@ import { BANK_PRESETS, autoMapColumns, parseBankAmount, type BankPreset } from '
 import { localizedPair } from '@/lib/finzen/localize';
 import { EmptyState } from '@/components/finzen/ui/empty-state';
 import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
+import { useUndo } from '@/hooks/use-undo';
+import type { ImportBatchUndoSnapshot } from '@/lib/finzen/undo';
 
 interface ParsedBankTx {
   date: string;
@@ -33,6 +35,7 @@ export function BankImportFlow() {
   const store = useFinZenStore();
   const { locale, accounts, categories, baseCurrency, transactions, addTransaction } = store;
   const t = translations[locale];
+  const { offerUndo } = useUndo();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('bank');
   const [preset, setPreset] = useState<BankPreset | null>(null);
@@ -177,6 +180,7 @@ export function BankImportFlow() {
     let imported = 0, duplicates = 0;
     let skipped = isOfx ? 0 : Math.max(0, rows.length - parsed.length);
     const importBatchId = `bank_${preset?.key ?? 'generic'}_${Date.now()}`;
+    const importedRows: ImportBatchUndoSnapshot['transactions'] = [];
     const existingTxKeys = new Set<string>();
     transactions.forEach(tx => {
       const datePart = tx.occurredOn.split('T')[0];
@@ -196,7 +200,13 @@ export function BankImportFlow() {
         if (found) categoryId = found.id;
       }
       try {
-        await addTransaction({ type: p.type as TransactionType, amount: p.amount, currency, fromAccountId: p.type === 'income' ? `x_${categoryId}` : targetAccountId, toAccountId: p.type === 'expense' ? `x_${categoryId}` : targetAccountId, categoryId, description: p.description, occurredOn: toStorageISOString(d), tags: [importBatchId], importSource: 'bank' });
+        const created = await addTransaction({ type: p.type as TransactionType, amount: p.amount, currency, fromAccountId: p.type === 'income' ? `x_${categoryId}` : targetAccountId, toAccountId: p.type === 'expense' ? `x_${categoryId}` : targetAccountId, categoryId, description: p.description, occurredOn: toStorageISOString(d), tags: [importBatchId], importSource: 'bank' });
+        importedRows.push({
+          id: created.id,
+          updatedAt: created.updatedAt,
+          tags: created.tags,
+          importSource: 'bank',
+        });
         imported++;
       } catch { skipped++; }
     }
@@ -204,7 +214,24 @@ export function BankImportFlow() {
     setStep('done');
     let msg = `${imported} ${t['import.bankImported']}, ${duplicates} ${t['import.bankDuplicates']}`;
     if (skipped > 0) msg += `, ${skipped} ${t['import.bankInvalid']}`;
-    toast.success(msg);
+    if (importedRows.length > 0) {
+      const snapshot: ImportBatchUndoSnapshot = {
+        batchId: importBatchId,
+        transactions: importedRows,
+      };
+      try {
+        const receipt = await store.issueImportBatchUndoReceipt(snapshot);
+        offerUndo(
+          { kind: 'import_batch', snapshot, receipt },
+          msg
+        );
+      } catch {
+        // Sin recibo válido del servidor no se ofrece deshacer.
+        toast.success(msg);
+      }
+    } else {
+      toast.success(msg);
+    }
   }
 
   const dialogTitle = step === 'bank' ? t['import.bankChoose']

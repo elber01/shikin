@@ -96,5 +96,9 @@ export async function DELETE(
     );
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    deleted: result.deleted,
+    undoReceipt: result.undoReceipt,
+  });
 }

@@ -6761,3 +6761,174 @@ token de auth).
   escritura que ha pasado por este chat). El backup local se conserva
   mientras no confirme visualmente que los colores son correctos; el
   rollback es `bun scripts/migrate-category-colors.ts --rollback "db/category-colors.2026-11-14T20-32-27-727Z.backup" --allow-production`.
+
+## PHASE 10 — U3: deshacer (undo) + límites de error
+
+**Task ID:** 10-U3
+**Agent:** Coordinador → Planificador → Implementador → Revisor (2 revisiones)
+**Owner:** Edwin (aprobación: "Adelante — plan completo", 14-nov-2026)
+**Status:** ✅ Cerrado — revisor APRUEBA (2ª revisión), 0 bloqueantes, `bun run verify` exit 0
+**Base:** `1490169` (10-U2 + ajuste del trigger de la paleta)
+
+### Objetivo
+
+Que el usuario pueda **deshacer** una eliminación sin salir de la app, y que
+un fallo de render **no tumbe** la aplicación. Sin tocar el contrato v1, sin
+cambiar el esquema de BD y sin dependencias nuevas.
+
+### Diagnóstico (el planificador lo verificó en el código)
+
+- **No existía ningún error boundary** (`app/error.tsx`, `global-error.tsx` ni
+  boundary de componente) → un fallo al renderizar una vista tumbaba la app
+  entera sin salida.
+- Los borrados son **físicos** en las 4 entidades (transacción, cuenta,
+  categoría, partida) y `POST /api/restore` es un **importador de respaldo**,
+  no un sistema de undo (solo devuelve conteos, salta IDs existentes y no
+  cubre categorías ni presupuestos).
+- Ya existía un "Deshacer" en la hoja de transacción, pero **estaba mal
+  hecho**: recreaba con **ID nuevo**, forzaba `importSource: 'manual'`
+  (perdía `csv`/`bank`), no preservaba `tags` y no recargaba el store.
+
+### Spec primero (coordinador, antes del código)
+
+| Documento | Cambio |
+|---|---|
+| `SDD.md` §1 | Viñeta "Undo (10-U3)": snapshot autoritativo en memoria 10 s, `POST /api/undo` restaura con el ID original, sin tabla de undo |
+| `SDD.md` §2 | Nota U3: `/api/v1/*` sin cambios; un DELETE por API v1 sigue siendo físico y no genera snapshot; `/api/undo` es interno |
+| `SDD.md` §5 | **Convención 9**: undo + recibo firmado + límites de error |
+| `skills.md` §6 | Recetas `destructive_undo` y `error_boundary` |
+| `AGENTS.md` §5 | Subsección "Undo y error boundaries (10-U3)" |
+| `AGENTS.md` §6 | Mapa del repo (7 ficheros nuevos) |
+| `agents/orchestrator.md` | **SIN CAMBIOS** — U3 no añade skill de agente |
+
+### Los 5 pasos
+
+1. **Servicio de undo + endpoint interno.** `src/lib/finzen/undo.ts` (DTOs
+   puros, `UNDO_WINDOW_MS = 10_000`, `UNDO_MAX_BATCH = 500`),
+   `src/lib/services/undo-service.ts` (`undoForUser(userId, input: unknown)`,
+   idempotente, validación estricta de doble entrada, lote en
+   `db.$transaction`), `src/app/api/undo/route.ts` (adaptador delgado con
+   `getServerSession` → 401 `unauthorized`).
+2. **Snapshots autoritativos + store tipado.** `transactions-service.ts` nuevo
+   (`deleteTransactionForUser`), `deleteBudgetItemForUser()` en
+   `budgets-service.ts`, `accounts-service.ts`/`categories-service.ts`
+   ampliados. Los 4 DELETE internos devuelven `{ success, deleted }`
+   (**aditivo**: los errores no cambian). Store: `apiFetch<T>` (cierra la
+   deuda #18), `as any` fuera, `loadData(): boolean`, `addTransaction()`
+   devuelve la fila creada por el servidor, deletes devuelven snapshot,
+   `pendingUndo` + limpieza en `resetStore()`.
+3. **Undo individual + UX del toast.** `src/hooks/use-undo.ts` (toast Sonner
+   con acción, 10 s, reemplazo del pendiente anterior con `toast.dismiss`,
+   doble clic bloqueado con `status: 'restoring'`, rearmado si falla la
+   recarga, errores traducidos por código). Vistas: cuentas, categorías,
+   presupuestos, transacciones y la hoja de alta (undo defectuoso eliminado).
+   Los 409 (`account_has_transactions`, `category_has_transactions`,
+   `category_in_budget`) **no** generan undo.
+4. **Undo de importación masiva.** `import-view.tsx` y
+   `bank-import-flow.tsx`: captura `id`/`updatedAt`/`tags`/`importSource` de
+   las filas **realmente creadas**; un único undo de lote; 0 filas → no hay
+   undo.
+5. **Error boundaries.** `error-report.ts` (log saneado),
+   `view-error-boundary.tsx` (class component propio, **sin dependencia
+   nueva**, solo render/lifecycle), `ui/error-fallback.tsx` (i18n,
+   `role="alert"`), `app/error.tsx`, `app/global-error.tsx` (autocontenido,
+   con `<html>`/`<body>`), y el shell envuelto en el boundary.
+
+### 🔴 El hallazgo importante: la primera entrega fue RECHAZADA
+
+El revisor detectó **3 bloqueantes de seguridad** en la primera entrega: el
+snapshot **lo controla el cliente**, y el servicio confiaba en él y creaba la
+fila con el `userId` de sesión. Consecuencias reales:
+
+- un atacante podía **"restaurar" objetos de otro usuario** y reasignárselos
+  (la fila pasaba a ser suya);
+- podía **fabricar filas nuevas** que nunca existieron;
+- una categoría de otro usuario se autorizaba por `isSystem: true`.
+
+**Solución implementada (la spec se actualizó antes de codificar el fix):**
+**recibo firmado en servidor**.
+
+- `src/lib/services/undo-receipt.ts` (server-only): HMAC-SHA256 con clave
+  derivada de `NEXTAUTH_SECRET` + contexto `shikin:undo:v1`;
+  `stableStringify` (claves ordenadas recursivamente → el hash no depende del
+  orden JSON); comparación con `timingSafeEqual`; sin secreto → **error
+  explícito**, nunca una clave débil.
+- El recibo ata `userId` + `kind` + `id` + hash del snapshot, y **se valida
+  antes de cualquier escritura**.
+- Ownership estricto de categorías: solo `userId === sesión` **o**
+  (`userId === null` **AND** `isSystem === true`). Un snapshot de categoría
+  con `isSystem !== false` → `invalid_category`; `restoreCategory` escribe
+  siempre `isSystem: false`.
+- El lote importado no pasa por un DELETE → su recibo se emite en
+  `POST /api/undo/import-batch-receipt` (con sesión y validación de
+  ownership).
+
+Además, la 4ª observación (desviación del contrato): el logger registraba
+`componentStack` y `timestamp`, que el plan prohibía → el tipo del reporte
+queda **exactamente** `{ scope, name, digest?, stack? }`.
+
+Y los 3 avisos no bloqueantes se arreglaron también: logout → `resetStore()`
+dismissa el toast de undo; `global-error.tsx` elige el locale por
+`navigator.language` primero (el layout fija `lang="es"` siempre, así que
+antes el fallback global salía siempre en español); `undo_failed` ya no
+devuelve el mensaje crudo de Prisma al cliente (se registra solo en servidor).
+
+### Verificación
+
+- **`bun run verify` exit 0** en los 5 pasos + verificación final del
+  coordinador (25 rutas: `ƒ /api/undo` y `ƒ /api/undo/import-batch-receipt`).
+- **Revisor: RECHAZÓ la 1ª entrega; la 2ª fue APRUEBA** (0 bloqueantes, 0
+  no bloqueantes funcionales). Reprodujo **por su cuenta** las pruebas IDOR en
+  la BD local (nunca Turso):
+
+| Caso | HTTP | Error | Filas afectadas |
+|---|---:|---|---:|
+| Snapshot sin recibo | 400 | `invalid_undo_payload` | 0 |
+| Snapshot alterado | 400 | `invalid_undo_payload` | 0 |
+| Recibo de otro usuario | 400 | `invalid_undo_payload` | 0 |
+| Transacción firmada con cuenta ajena | 409 | `undo_dependency_missing` | 0 |
+| Snapshot de cuenta ajena | 409 | `undo_conflict` | 0 |
+| Categoría ajena con `isSystem: true` | 422 | `invalid_category` | 0 |
+| Categoría falsificada `isSystem: true` | 422 | `invalid_category` | 0 |
+| Partida con presupuesto ajeno | 409 | `undo_dependency_missing` | 0 |
+| **Borrar → deshacer legítimo** | 200 | `restored` | 1 (mismo `id`, campos verbatim) |
+| Mismo ID y contenido | 200 | `already_restored` | 0 |
+| Mismo ID, contenido distinto | 409 | `undo_conflict` | 0 |
+
+  Lote: fila cambiada → `409 undo_batch_conflict` + `changedCount=1` y **0
+  borradas**; fila ya desaparecida → `skippedCount`; reintento →
+  `already_removed`; 501 filas → rechazadas.
+- **Greps:** `as any` en `src/store/finzen-store.ts` → **0** (queda 1
+  preexistente en `src/lib/db.ts:310`) · `bg-white|text-white|text-gray-*` en
+  lo tocado → 0 · HEX nuevos → 0 · `localStorage|sessionStorage` → 0 ·
+  `componentStack`/`timestamp` en el logger → 0 · `node:crypto` solo en el
+  módulo server-only (**0 marcadores del recibo en `.next/static`**) ·
+  `locale === 'es' ?` → 0 · 0 colores crudos.
+- **i18n:** **468 es / 468 en**, 0 faltantes, 0 sobrantes, 0 duplicados.
+- **Intactos:** `prisma/schema.prisma`, `package.json`, `bun.lock`,
+  **`src/app/api/v1/**`** (un DELETE v1 no emite recibo: una API key no puede
+  generar snapshots), `src/lib/auth/**`, `src/lib/db.ts`, `finance.ts`,
+  `src/components/ui/**`, `/api/restore` → doble entrada, net worth y
+  contrato v1 sin tocar. 0 dependencias nuevas, 0 cambios de esquema.
+
+### Deuda que esta fase deja abierta
+
+- **Cero tests automatizados** — ahora **más urgente**: U3 mete lógica de
+  servidor crítica (recibo firmado, validación de doble entrada, lote
+  todo-o-nada) verificada a mano en la BD local. **10-U4 (Vitest)** es el
+  blocker del bloque de agentes.
+- El undo es **efímero por diseño** (deuda #26): no sobrevive a recarga, solo
+  hay una acción pendiente y no hay pila. Persistirlo exigiría un noveno
+  modelo (`UndoLog`) + `db:push` en Turso → fase aparte con visto bueno.
+- El logger solo escribe en consola (deuda #27): queda como *seam* para el
+  futuro runtime de agentes.
+- Deudas #16 (`text-white` en `ui/button.tsx`), #17 (`use-alerts.ts` sin
+  `localizedCategoryName`) y #24 (`ui/dialog.tsx` con "Close" en inglés)
+  siguen abiertas.
+
+### Siguiente fase
+
+**10-U4** (drill-down + tests **Vitest**) — pendiente de planificación. Con
+ella queda cerrado el bloque de UI (U0→U4) y se desbloquea el bloque de
+agentes: Fase 0 → Fase 1 (capa de servicios) → tools + log auditable + undo →
+consola in-app → servidor MCP.

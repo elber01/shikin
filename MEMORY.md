@@ -85,6 +85,20 @@
 
 **✅ 10-U2 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `1d65cc8` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `oHDUufps…` → `me4LhKJ06tWs_1A_jJn4H`; `/login` y `/` → 200). Working tree limpio. 10-U1 = `821ee87` (commiteada, pusheada y desplegada) · 10-U0 = `7a53c1f` (commiteada, pusheada y desplegada).
 
+Sesión 14-nov-2026 (10-U3 — deshacer + límites de error; flujo coordinador→planificador→implementador→revisor; **el revisor rechazó la primera entrega** por 3 bloqueantes de seguridad y la segunda revisión fue **APRUEBA**, 0 bloqueantes):
+- **Alcance:** 5 pasos atómicos, cada uno con `bun run verify` en verde. Cierra la deuda #18 (`apiFetch<T>`).
+- **Spec primero (coordinador):** `SDD.md` §1 (viñeta "Undo (10-U3)"), §2 (nota U3: `/api/v1/*` intacto), §5 **convención 9** (undo + recibo firmado + límites de error); `skills.md` §6 (`destructive_undo`, `error_boundary`); `AGENTS.md` §5 (subsección "Undo y error boundaries (10-U3)") y §6 (mapa). `agents/orchestrator.md` **sin cambios** (U3 no añade skill de agente).
+- **Hallazgo del planificador:** ya existía un "Deshacer" en la hoja de transacción, pero **estaba mal hecho** (recreaba con ID nuevo, forzaba `importSource: 'manual'`, perdía `tags`, no recargaba el store) → sustituido por el mecanismo único.
+- **Mecanismo:** snapshot autoritativo devuelto por el servidor en cada DELETE → **en memoria 10 s** (nunca `localStorage`) → toast Sonner con acción "Deshacer" → `POST /api/undo` restaura con el **ID original** y los campos verbatim. Una sola acción pendiente (no pila); recargar o cerrar sesión la descarta. Sin cambio de esquema: **no** hay tabla `UndoLog` ni `db:push`.
+- **🔴 El bloqueante de seguridad (lo importante):** la primera entrega fue **RECHAZA** porque el snapshot lo controla el atacante: el servicio confiaba en él y creaba la fila con el `userId` de sesión → un atacante podía "restaurar" objetos de **otro usuario** (reasignándolos) o **fabricar filas nuevas**. **Solución implementada: recibo firmado en servidor** (`src/lib/services/undo-receipt.ts`): HMAC-SHA256 con clave derivada de `NEXTAUTH_SECRET` + contexto `shikin:undo:v1`, `stableStringify` (claves ordenadas recursivamente), comparación con `timingSafeEqual`, sin secreto → error explícito (nunca clave débil). El recibo ata `userId` + `kind` + `id` + hash del snapshot y **se valida antes de cualquier escritura** → snapshot fabricado, alterado o ajeno = `invalid_undo_payload` (400), 0 filas.
+- **Otros 2 bloqueantes corregidos:** (a) una categoría de otro usuario se autorizaba por `isSystem: true` → ahora solo vale `userId === sesión` **o** (`userId === null` **AND** `isSystem === true`); (b) se podía crear una categoría de sistema falsa → todo snapshot de categoría con `isSystem !== false` se rechaza (`invalid_category`) y `restoreCategory` escribe siempre `isSystem: false`.
+- **Cuarto hallazgo (desviación contractual):** el logger registraba `componentStack` y `timestamp`, que el plan prohibía → el tipo del reporte queda **exactamente** `{ scope, name, digest?, stack? }`.
+- **3 avisos del revisor también arreglados:** logout → `resetStore()` dismissa el toast de undo; `global-error.tsx` elige el locale por `navigator.language` primero (el layout fija `lang="es"` siempre, así que antes salía siempre en español); `undo_failed` ya no devuelve el mensaje crudo de Prisma al cliente (se registra solo en servidor).
+- **Doble entrada y net worth:** al restaurar no se crea ninguna fila `Account` con id `x_*` (es una convención de string); el asiento mantiene real↔virtual; la cuenta restaurada conserva `currentBalance` → el net worth recupera el valor previo; un asiento legado `categoryId = null` + `x_undefined` → `invalid_transaction` (no se inventa una categoría).
+- **Importación masiva = todo o nada:** precondición `updatedAt` por fila; si una fila cambió → `409 undo_batch_conflict` + `changedCount` y **0 filas borradas**; las ya desaparecidas cuentan como `skippedCount`; cota `UNDO_MAX_BATCH = 500`. El lote no pasa por un DELETE → el recibo se emite en un endpoint interno aparte (`POST /api/undo/import-batch-receipt`, con sesión y validación de ownership).
+- **Error boundaries:** antes **no existía ninguno** (un fallo de render tumbaba la app sin salida). Ahora: `src/app/error.tsx` (ruta), `src/app/global-error.tsx` (root, autocontenido con `<html>`/`<body>`, sin depender del root layout ni del `Toaster`), `src/components/finzen/view-error-boundary.tsx` (class component propio, **sin dependencia nueva**, solo render/lifecycle) y `src/components/finzen/ui/error-fallback.tsx` (i18n, `role="alert"`, "Reintentar" e "Ir al panel"). Los fallos de **acciones** del usuario siguen siendo toast.
+- **Verificación:** `bun run verify` exit 0 en los 5 pasos + verificación final del coordinador (25 rutas). El revisor **repitió por su cuenta** las pruebas IDOR en la BD local (nunca Turso): snapshot sin recibo / alterado / de otro usuario → 400 con 0 filas; transacción firmada con cuenta ajena → 409 `undo_dependency_missing`; categoría ajena con `isSystem:true` → 422; lote con fila cambiada → 409 con 0 borrados; lote reintentado → `already_removed`; 501 filas → rechazadas. Caso legítimo → mismo `id` y campos verbatim. `node:crypto` solo en el módulo server-only (0 marcadores del recibo en `.next/static`). i18n **468 es / 468 en**. Intactos: `prisma/schema.prisma`, `package.json`, `bun.lock`, **`src/app/api/v1/**`**, `src/lib/auth/**`, `src/lib/db.ts`, `finance.ts`, `src/components/ui/**`, `/api/restore` → doble entrada, net worth y contrato v1 sin tocar. 0 `as any` nuevos.
+
 Sesión 14-nov-2026 (10-U2 — command palette + deep-links + teclado; flujo coordinador→planificador→implementador→revisor; revisor APRUEBA, 0 bloqueantes):
 - **Alcance:** 6 pasos atómicos, cada uno con `bun run verify` en verde. Cierra deuda #24 y añade la convención 10-U2.
 - **Spec primero (coordinador, antes del código):** `SDD.md` §1 (viñeta "Navegación") y §5 **convención 8** (deep-links + `<Suspense>` + paleta + atajos); `skills.md` §6 (`add_view` actualizada + `view_deep_link` + `keyboard_shortcuts`); `AGENTS.md` §5 (subsección "Deep-links, command palette y navegación por teclado (10-U2)") y §6 (mapa + "Añadir una vista nueva"). `agents/orchestrator.md` **sin cambios**: U2 no añade, renombra ni altera ninguna skill invocable por el agente → no se activa la regla de `agents/orchestrator.md:12-14`.
@@ -469,9 +483,10 @@ pendiente de repoint (§5).
 17. **`src/hooks/use-alerts.ts` resuelve el nombre de categoría por su cuenta**
     (3 sitios con `cat.nameEs || cat.name`) en vez de usar
     `localizedCategoryName()` (creado en 10-U0). -> pendiente, 1 línea.
-18. **`apiFetch` devuelve `any`** (`res.json()` sin genérico) → el resultado de
-    los POST no se valida estáticamente contra el tipo de la entidad.
-    -> `apiFetch<T>` con genérico.
+18. ~~**`apiFetch` devuelve `any`**~~ **RESUELTO (10-U3, 14-nov-2026):**
+    `apiFetch<T>` con genérico; el `as any` del store eliminado (queda 1
+    preexistente en `src/lib/db.ts:310`). Los POST/DELETE ya se validan
+    estáticamente contra el tipo de la entidad.
 19. **Multiusuario exigido para la consola de agentes** (decisión del dueño
     12-nov-2026): la clave del proveedor LLM será **por usuario** → exige
     cifrado en reposo, aislamiento por usuario y cuotas por plan. Duplica el
@@ -510,6 +525,18 @@ pendiente de repoint (§5).
     manual + un test temporal fuera del repo (4 asserts sobre el historial de
     `navigate()`). La red de seguridad real llega en **10-U4 (Vitest)** —
     es el blocker del bloque de agentes (multi-tenant).
+26. **El undo de 10-U3 es efímero por diseño:** el snapshot vive solo en
+    memoria, así que **no se puede deshacer tras recargar, cerrar la pestaña
+    o cerrar sesión**, ni desde otro dispositivo, y solo hay **una** acción
+    pendiente (no una pila). Persistirlo exigiría un noveno modelo
+    (`UndoLog`) + `db:push` en Turso + TTL + política de datos financieros →
+    sería una fase aparte, con visto bueno del dueño. Límite conocido, no
+    regresión.
+27. **El logger de errores (`src/lib/finzen/error-report.ts`) solo escribe en
+    consola** (no hay telemetría externa ni red nueva, por diseño). Queda como
+    *seam* para el futuro runtime de agentes: cuando exista, solo debe recibir
+    `{ scope, name, digest?, stack? }` — **nunca** emails, descripciones,
+    nombres de cuenta, API keys, headers ni snapshots.
 
 ## 6. Lecciones aprendidas (para no repetir errores)
 

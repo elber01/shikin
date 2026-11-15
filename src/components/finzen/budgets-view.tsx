@@ -19,10 +19,12 @@ import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
 import { ProgressBar } from '@/components/finzen/ui/progress-bar';
 import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
 import { CategoryIcon } from '@/components/finzen/ui/category-icon';
+import { useUndo } from '@/hooks/use-undo';
 
 export function BudgetsView() {
   const { budget, transactions, categories, locale, baseCurrency, addBudgetItem, updateBudgetItem, deleteBudgetItem } = useFinZenStore();
   const t = translations[locale];
+  const { offerUndo } = useUndo();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState('');
@@ -50,7 +52,7 @@ export function BudgetsView() {
       if (err.code === 'invalid_category') return t['budgets.errorInvalidCategory'];
       if (err.code === 'invalid_amount') return t['budgets.errorInvalidAmount'];
     }
-    return String(err).replace('Error: ', '');
+    return t['budgets.operationFailed'];
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -73,8 +75,15 @@ export function BudgetsView() {
   }
 
   async function handleDelete(itemId: string) {
-    try { await deleteBudgetItem(itemId); toast.success(t['budgets.deleted']); }
-    catch (err) { toast.error(budgetErrorMessage(err)); }
+    try {
+      const { snapshot, undoReceipt } = await deleteBudgetItem(itemId);
+      offerUndo(
+        { kind: 'budget_item', snapshot, receipt: undoReceipt },
+        t['undo.deleted.budgetItem']
+      );
+    } catch {
+      toast.error(t['budgets.deleteFailed']);
+    }
   }
 
   const items = useMemo(() => {

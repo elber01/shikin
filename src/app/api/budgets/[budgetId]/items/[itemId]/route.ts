@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
 import { db } from '@/lib/db';
+import { deleteBudgetItemForUser } from '@/lib/services/budgets-service';
 
 // PATCH /api/budgets/[budgetId]/items/[itemId] — update plannedAmount and/or alertThresholdPct
 export async function PATCH(
@@ -61,23 +62,17 @@ export async function DELETE(
 
   const { budgetId, itemId } = await params;
 
-  const budget = await db.budget.findFirst({
-    where: { id: budgetId, userId: session.user.id },
-  });
-
-  if (!budget) {
-    return NextResponse.json({ error: 'Budget not found' }, { status: 404 });
+  const result = await deleteBudgetItemForUser(session.user.id, budgetId, itemId);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.resource === 'budget' ? 'Budget not found' : 'Budget item not found' },
+      { status: 404 }
+    );
   }
 
-  const item = await db.budgetItem.findFirst({
-    where: { id: itemId, budgetId },
+  return NextResponse.json({
+    success: true,
+    deleted: result.deleted,
+    undoReceipt: result.undoReceipt,
   });
-
-  if (!item) {
-    return NextResponse.json({ error: 'Budget item not found' }, { status: 404 });
-  }
-
-  await db.budgetItem.delete({ where: { id: itemId } });
-
-  return NextResponse.json({ success: true });
 }

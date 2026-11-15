@@ -19,6 +19,7 @@ import { IconButton } from '@/components/finzen/ui/icon-button';
 import { ConfirmDelete } from '@/components/finzen/ui/confirm-delete';
 import { CurrencySelect } from '@/components/finzen/ui/currency-select';
 import { CrudDialog } from '@/components/finzen/ui/crud-dialog';
+import { useUndo } from '@/hooks/use-undo';
 
 const SUB_TYPE_META: Record<string, { icon: typeof Wallet; label: string; labelEs: string }> = {
   checking: { icon: Wallet, label: 'Checking', labelEs: 'Cuenta corriente' },
@@ -44,6 +45,7 @@ const CURRENCY_ICON_BG = 'color-mix(in oklab, currentColor 8%, transparent)';
 export function AccountsView() {
   const { accounts, locale, baseCurrency, transactions, addAccount, updateAccount, deleteAccount } = useFinZenStore();
   const t = translations[locale];
+  const { offerUndo } = useUndo();
   const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -77,8 +79,11 @@ export function AccountsView() {
 
   async function handleDelete(id: string) {
     try {
-      await deleteAccount(id);
-      toast.success(t['accounts.deleted']);
+      const { snapshot, undoReceipt } = await deleteAccount(id);
+      offerUndo(
+        { kind: 'account', snapshot, receipt: undoReceipt },
+        t['undo.deleted.account']
+      );
     } catch (err) {
       // El 409 de "cuenta con historial" llega con código + número de
       // transacciones: el mensaje va en el idioma del usuario, no en inglés.
