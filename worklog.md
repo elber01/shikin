@@ -6769,6 +6769,8 @@ token de auth).
 **Owner:** Edwin (aprobación: "Adelante — plan completo", 14-nov-2026)
 **Status:** ✅ Cerrado — revisor APRUEBA (2ª revisión), 0 bloqueantes, `bun run verify` exit 0
 **Base:** `1490169` (10-U2 + ajuste del trigger de la paleta)
+**Commit:** `e95c9ab` — pusheado a `main` el 14-nov-2026 (working tree limpio)
+**Deploy:** automático en Vercel, build id `OyfVzV_GhlmJsZfBn6qDg` (`/login` y `/` → 200)
 
 ### Objetivo
 

@@ -85,6 +85,8 @@
 
 **✅ 10-U2 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `1d65cc8` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `oHDUufps…` → `me4LhKJ06tWs_1A_jJn4H`; `/login` y `/` → 200). Working tree limpio. 10-U1 = `821ee87` (commiteada, pusheada y desplegada) · 10-U0 = `7a53c1f` (commiteada, pusheada y desplegada).
 
+**✅ 10-U3 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `e95c9ab` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `OyfVzV_GhlmJsZfBn6qDg`; `/login` y `/` → 200). Working tree limpio. 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
+
 Sesión 14-nov-2026 (10-U3 — deshacer + límites de error; flujo coordinador→planificador→implementador→revisor; **el revisor rechazó la primera entrega** por 3 bloqueantes de seguridad y la segunda revisión fue **APRUEBA**, 0 bloqueantes):
 - **Alcance:** 5 pasos atómicos, cada uno con `bun run verify` en verde. Cierra la deuda #18 (`apiFetch<T>`).
 - **Spec primero (coordinador):** `SDD.md` §1 (viñeta "Undo (10-U3)"), §2 (nota U3: `/api/v1/*` intacto), §5 **convención 9** (undo + recibo firmado + límites de error); `skills.md` §6 (`destructive_undo`, `error_boundary`); `AGENTS.md` §5 (subsección "Undo y error boundaries (10-U3)") y §6 (mapa). `agents/orchestrator.md` **sin cambios** (U3 no añade skill de agente).
