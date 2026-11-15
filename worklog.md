@@ -6934,3 +6934,152 @@ devuelve el mensaje crudo de Prisma al cliente (se registra solo en servidor).
 ella queda cerrado el bloque de UI (U0→U4) y se desbloquea el bloque de
 agentes: Fase 0 → Fase 1 (capa de servicios) → tools + log auditable + undo →
 consola in-app → servidor MCP.
+
+
+## PHASE 10 — U4: drill-down (filtros en URL) + tests automatizados con Vitest
+
+**Task ID:** 10-U4
+**Agent:** Coordinador → Planificador → Implementador → Revisor (3 revisiones)
+**Owner:** Edwin (aprobación: "Adelante — plan completo", 15-nov-2026)
+**Status:** ✅ Cerrado — revisor APRUEBA (3 revisiones), 0 bloqueantes, `bun run verify` exit 0
+**Base:** `7a439cd` (cierre de docs de 10-U3)
+
+### Objetivo
+
+Cerrar el bloque UI (U0→U4) con dos entregables: (a) los **agregados
+navegables** (drill-down) con los **filtros en la URL**, y (b) la **primera red
+de tests automatizados** del repo, que es el blocker del bloque de agentes
+(multi-tenant + endpoint OpenAI-compatible).
+
+### Spec primero (coordinador, antes del código)
+
+| Documento | Cambio |
+|---|---|
+| `SDD.md` §1 | Viñeta "Filtros y drill-down (10-U4)": la URL es la fuente de verdad de los filtros |
+| `SDD.md` §2 | Nota U4: `/api/v1/*` sin cambios; el drill-down es navegación interna |
+| `SDD.md` §5 | **Convención 10**: drill-down y filtros en URL (parseo total, filtro colgante, botones reales, gráficos no interactivos, honestidad de datos) |
+| `SDD.md` §6 | Fase 0: la parte de Vitest **se adelanta a 10-U4** |
+| `SDD.md` §7.1 | Deuda "cero tests" → **parcialmente resuelta** |
+| `skills.md` §1/§3 | Verificaciones actualizadas a test unitario Vitest |
+| `skills.md` §6 | Recetas `transaction_drilldown` y `unit_test`; `verify_quality` → lint+typecheck+test+build; `view_deep_link` → canonicalización preserva params |
+| `AGENTS.md` §3 | `bun run test` + verify con test |
+| `AGENTS.md` §5 | Subsecciones "Drill-down y filtros en URL (10-U4)" y "Tests automatizados (Vitest) (10-U4)" |
+| `AGENTS.md` §6/§7 | Mapa del repo + prohibido tests contra `db/custom.db`/Turso |
+| `agents/orchestrator.md` | **SIN CAMBIOS** (U4 no añade skill de agente) → `git diff --exit-code` ⇒ 0 |
+
+### Decisiones de criterio (aprobadas por Edwin)
+
+- El KPI **no** se convierte entero en un botón: el drill-down es un **botón
+  explícito dentro de la tarjeta** ("Ver gastos →").
+- Los **sectores/barras de recharts NO son interactivos**: un SVG no es
+  operable por teclado → sería un control solo-ratón. El drill-down vive en la
+  leyenda/lista, con `<button>` reales.
+- Los **agregados compuestos** (patrimonio neto, ratio de ahorro, ahorro neto,
+  total de presupuesto) **no** son clicables: no hay destino real detrás.
+
+### Los 8 pasos
+
+1. **Infra Vitest** (`vitest.config.mts`, `tests/setup.ts`, smoke test) +
+   `package.json` (`test`, `test:watch`, `verify` con test) + 3 devDeps.
+2. **P0 — tests de undo**: recibo HMAC (`stableStringify` determinista,
+   snapshot alterado/ajeno ⇒ `false`) y `undo-service` con **fake de BD que
+   registra escrituras** (permite afirmar "0 escrituras" en los caminos de
+   error).
+3. **P1 — dominio puro**: category-color (OKLab), views, currency, finance,
+   export (RFC 4180).
+4. **Drill-down, núcleo puro**: `transaction-filters.ts` + `view-href.ts` +
+   tests (parseo total, `from>to` invertido, orden canónico, `monthKeyRange`).
+5. **Drill-down, cableado**: `navigate(view, { filters, replace })`,
+   `view-route-sync` preservando params, `transactions-view.tsx` **sin sus 5
+   `useState` de filtro**, filtro colgante con aviso + "Quitar filtros".
+6. **Drill-down, superficies**: Dashboard (KPI ingresos/gastos + leyenda del
+   donut), Reportes (totales + top categorías), Presupuestos (fila) y Cuentas
+   (nombre) + `role="img"`/`aria-label` en los contenedores recharts.
+7. **P2**: paridad i18n (**claves y placeholders**) + contrato v1 (401 sin
+   tocar BD + escaneo estático de `error:`/`code:` snake_case).
+8. **P3**: servicios contra un **SQLite temporal** (DDL de `prisma migrate
+   diff`, borrado al final) + contrato estático del drill-down.
+
+### La trampa que se corrigió (coherencia número ↔ destino)
+
+El `spent` de un presupuesto calculaba el gasto contra el **mes actual**
+mientras el presupuesto tiene su propio `startDate/endDate` → el usuario veía
+una cifra y el drill-down lo llevaba a **otro periodo**. Ahora cálculo y
+destino usan **el mismo rango completo** (`budgetPeriodRange`) y el destino de
+presupuestos/donut/top categorías añade `type:'expense'` → la igualdad es
+**estructural**, no por convención de datos. Hay un test que **falla** si se
+quita el filtro de tipo.
+
+### Los 3 hallazgos del revisor (ninguno bloqueante, todos corregidos)
+
+1. **Falso aviso de "filtro colgante" durante la carga** → ahora la detección
+   mira `loading` (`resolveFilterActivation`): cargando, el filtro **se
+   aplica** y no hay aviso.
+2. **El `aria-label` del `Select` pisaba el valor seleccionado** ("Todas las
+   categorías" aunque hubiera una seleccionada) → nombre genérico
+   ("Categoría"/"Cuenta") + ítem pendiente durante la carga (Radix exige que
+   el `value` tenga su `SelectItem`).
+3. **Faltaba el happy path del ingreso** en los tests del undo (la otra mitad
+   de la doble entrada) → añadido (`x_<cat>` → real, 1 escritura).
+
+### Verificación
+
+- **`bun run verify` exit 0**: lint + typecheck + **test (178 tests / 14
+  ficheros)** + build (25 rutas). El revisor lo ejecutó en sus 3 revisiones.
+- **i18n: 491 es / 491 en**, 0 faltantes, 0 sobrantes, 0 duplicados, **0
+  placeholders discordantes**.
+- **🔴 Guardarraíl del lockfile (primera dependencia nueva del programa):**
+  `bun.lock` 653→717 entradas, **0 paquetes eliminados**, 64 añadidos (solo
+  vitest/vite/rolldown/oxc), **0 dependencias de runtime cambiadas**. Los "21
+  cambios" que parecían deletes son **artefactos de hoisting** (los paquetes
+  old siguen presentes, anidados); la única arista real es
+  `fdir > picomatch 4.0.3→4.0.7`, **inevitable** (`vitest@5.1.0` exige
+  `picomatch ^4.0.7`) y semver-compatible. `package.json` solo trae 3 devDeps
+  + 2 scripts + `verify`.
+- **Aislamiento de BD:** `db/custom.db` con **hash y mtime idénticos** antes y
+  después de la corrida; `DATABASE_URL` se sobreescribe con un `file:`
+  temporal y hay fail-fast si no es `file:`; 0 temporales residuales.
+- **Intactos:** `prisma/schema.prisma`, **`src/app/api/v1/**`**,
+  `src/lib/auth/**` (solo el test nuevo), `src/lib/db.ts`, `finance.ts`,
+  `src/components/ui/**`, `agents/orchestrator.md`. 0 `as any` nuevos, 0 HEX
+  nuevos, 0 `<div onClick>`, 0 `role="button"`, 0 botones anidados.
+
+### Desviaciones aceptadas
+
+- `kpi-card.tsx` y `ui/stat-card.tsx`: nueva prop `labelAction` → el
+  drill-down es el botón del *nombre*. Son componentes **propios** del repo,
+  no `src/components/ui/*` (prohibido).
+- `localize.ts`: helper `filterPeriodLabel` para los `aria-label`.
+- Se aplicó el patrón `type:'expense'` también al donut y a top categorías
+  (no solo a presupuestos) porque ahí también había desajuste real entre el
+  número mostrado y el destino.
+
+### Deuda que esta fase deja abierta
+
+- **E2E de navegador (Playwright)**: no hay CI en el repo (`.github/` no
+  existe) ni tests de componentes (no hay `jsdom`, a propósito).
+- **Cobertura con umbral**: no activada (`@vitest/coverage-v8` no instalado).
+- `vitest.config.mts` queda **fuera** del type-check de `tsc` (el `include` de
+  `tsconfig.json` es `**/*.ts` y la spec de U4 prohíbe tocarlo) → ESLint sí lo
+  cubre. Los **tests** (`.ts`) sí entran en `tsc --noEmit` y en el build.
+- Deudas heredadas siguen abiertas: #16 (`text-white` en `ui/button.tsx`), #17
+  (`use-alerts.ts` sin `localizedCategoryName`), #24 (`ui/dialog.tsx` con
+  "Close" en inglés), #26 (undo efímero), #27 (logger sin telemetría).
+
+### Siguiente fase
+
+**Bloque de agentes** (lo que Edwin pidió al principio: manejar sus agentes
+**dentro** de la app, sin depender de una plataforma aparte):
+
+1. **Fase 0** (roadmap): deprecar `/api/agent/*`, rate limit sobre almacén
+   compartido, limpiar `z-ai-web-dev-sdk` (la parte de Vitest ya está hecha
+   en U4).
+2. **Fase 1** — capa de servicios extraída de `src/app/api/**`.
+3. **Tools + log auditable + undo** para las acciones de agente.
+4. **Consola in-app** (SSE, aprobación humana).
+5. **Servidor MCP**.
+
+Con **multi-tenant** (la clave del proveedor LLM es **por usuario**: cifrado
+en reposo, aislamiento y cuotas por plan) y **endpoint LLM compatible con
+OpenAI** (`LLM_BASE_URL` configurable, cero dependencias nuevas: `fetch` +
+`zod` ya instalados).

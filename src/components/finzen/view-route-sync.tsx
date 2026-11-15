@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useFinZenStore } from '@/store/finzen-store';
 import { parseViewKey } from '@/lib/finzen/views';
+import { replaceViewParamInSearch } from '@/lib/finzen/view-href';
 
 /**
  * Sincroniza la URL (`/?view=<viewKey>`) con el store (`activeView`).
@@ -17,7 +18,9 @@ import { parseViewKey } from '@/lib/finzen/views';
  *   1. `fromUrl = parseViewKey(viewParam)`.
  *   2. Si `fromUrl !== activeView` → `setActiveView(fromUrl)` y NO se hace
  *      `replace` (la canonicalización llega en la 2ª iteración).
- *   3. Si no y `viewParam !== fromUrl` → `router.replace('/?view=' + fromUrl)`.
+ *   3. Si no y `viewParam !== fromUrl` → `router.replace` con el param `view`
+ *      corregido, PRESERVANDO el resto de query params (convención 10-U4:
+ *      los filtros de Transacciones no se pierden al canonicalizar).
  *
  * El efecto depende del STRING `viewParam` (no del objeto `searchParams`) y
  * lee el store con `getState()` dentro del efecto.
@@ -26,6 +29,8 @@ export function ViewRouteSync() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewParam = searchParams.get('view');
+  // Query string completa como STRING (identidad estable entre renders).
+  const searchString = searchParams.toString();
   // Suscripción reactiva: hace que el efecto vuelva a correr cuando el store
   // cambia (necesario para la 2ª iteración de la canonicalización).
   const activeView = useFinZenStore((s) => s.activeView);
@@ -48,9 +53,14 @@ export function ViewRouteSync() {
     }
 
     if (viewParam !== fromUrl) {
-      router.replace(`/?view=${fromUrl}`, { scroll: false });
+      // La canonicalización PRESERVA el resto de query params (convención
+      // 10-U4): los filtros de Transacciones no se pierden al corregir el
+      // param `view`.
+      router.replace(replaceViewParamInSearch(searchString, fromUrl), {
+        scroll: false,
+      });
     }
-  }, [viewParam, activeView, router]);
+  }, [viewParam, activeView, router, searchString]);
 
   return null;
 }

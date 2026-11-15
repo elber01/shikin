@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -24,76 +24,106 @@ import {
   downloadTransactions,
 } from '@/lib/finzen/export';
 import { intlLocale, localizedCategoryName } from '@/lib/finzen/localize';
+import { toLocalDateString } from '@/lib/finzen/date-utils';
+import {
+  applyTransactionFilters,
+  hasActiveFilters,
+  presetToRange,
+  resolveDatePreset,
+  resolveFilterActivation,
+  resolveSelectFilterValue,
+  type DateFilterPreset,
+  type TransactionFilters,
+  type TransactionTypeFilter,
+} from '@/lib/finzen/transaction-filters';
+import { useTransactionFilters } from '@/hooks/use-transaction-filters';
 import { TransactionRow } from '@/components/finzen/transaction-row';
 import { StatCard } from '@/components/finzen/ui/stat-card';
 import { StatGrid } from '@/components/finzen/ui/stat-grid';
 import { EmptyState } from '@/components/finzen/ui/empty-state';
 
-type DateFilter = 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'last_year' | 'all' | 'specific_month';
+/** Espera antes de escribir el texto de búsqueda en la URL. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function TransactionsView() {
-  const { transactions, categories, accounts, locale, baseCurrency, setAddSheetOpen, setEditingTransactionId } = useFinZenStore();
+  const { transactions, categories, accounts, locale, baseCurrency, loading, setAddSheetOpen, setEditingTransactionId } = useFinZenStore();
   const t = translations[locale];
+
+  // ── Los filtros viven en la URL (convención 10-U4): no hay estado de
+  //    filtros en el store ni en el componente.
+  const { filters, applyFilters, clearFilters } = useTransactionFilters();
 
   function handleEditTx(id: string) {
     setEditingTransactionId(id);
     setAddSheetOpen(true);
   }
 
-  const [search, setSearch] = useState('');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [specificMonth, setSpecificMonth] = useState<string>(''); // YYYY-MM format
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [accountFilter, setAccountFilter] = useState<string>('all');
+  // ── Periodo DERIVADO de `from`/`to` (la URL es la fuente de verdad).
+  const now = new Date();
+  const datePreset = resolveDatePreset(filters, now);
+
+  // ── Filtros colgantes: apuntan a una categoría/cuenta que ya no existe →
+  //    se tratan como INACTIVOS (no se aplican) y se conservan en la URL.
+  //    MIENTRAS CARGA no se puede saber si el id existe: no se avisa y el
+  //    filtro se aplica con normalidad (si no, un deep-link válido se
+  //    descartaría al vuelo y saltaría un aviso falso).
+  const {
+    categoryActive: categoryIsActive,
+    accountActive: accountIsActive,
+    categoryExists,
+    accountExists,
+    hasDanglingFilter,
+  } = resolveFilterActivation(filters, { categories, accounts, loading });
+
+  // ── El `value` del Select SIEMPRE es un ítem existente de la lista (Radix):
+  //    · MIENTRAS CARGA → el id de la URL (el catálogo aún no está, pero el
+  //      filtro SÍ se aplica: el desplegable no puede afirmar "todas").
+  //    · TRAS CARGAR → el id si existe; si no, "todas" (el filtro queda
+  //      INACTIVO → el desplegable debe decirlo).
+  const categorySelectValue = resolveSelectFilterValue(
+    filters.categoryId,
+    categoryExists,
+    loading
+  );
+  const accountSelectValue = resolveSelectFilterValue(
+    filters.accountId,
+    accountExists,
+    loading
+  );
+  // Ítem PENDIENTE: durante la carga el catálogo está vacío, así que el id de
+  // la URL no tiene ítem propio → se añade uno (Radix exige que el valor
+  // exista en la lista) que anuncia que el catálogo se está cargando.
+  const pendingCategoryId =
+    loading && filters.categoryId !== null && !categoryExists ? filters.categoryId : null;
+  const pendingAccountId =
+    loading && filters.accountId !== null && !accountExists ? filters.accountId : null;
+
+  // ── Buffer local del input de búsqueda (el valor que FILTRA es el de la URL).
+  //    El buffer se re-sincroniza cuando cambia el `q` de la URL (back/forward).
+  const [search, setSearch] = useState(filters.query);
+  const [syncedQuery, setSyncedQuery] = useState(filters.query);
+  if (filters.query !== syncedQuery) {
+    setSyncedQuery(filters.query);
+    setSearch(filters.query);
+  }
+
+  useEffect(() => {
+    if (search === filters.query) return;
+    const timer = setTimeout(() => {
+      applyFilters({ ...filters, query: search });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search, filters, applyFilters]);
 
   const filtered = useMemo(() => {
-    const now = new Date();
-    return transactions
-      .filter((tx) => {
-        // Date filter
-        const d = new Date(tx.occurredOn);
-        switch (dateFilter) {
-          case 'this_month':
-            if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return false;
-            break;
-          case 'last_month': {
-            const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            if (d.getMonth() !== lm.getMonth() || d.getFullYear() !== lm.getFullYear()) return false;
-            break;
-          }
-          case 'this_quarter': {
-            // Quarter: Q1=Jan-Mar(0-2), Q2=Apr-Jun(3-5), Q3=Jul-Sep(6-8), Q4=Oct-Dec(9-11)
-            const q = Math.floor(now.getMonth() / 3);
-            const tq = Math.floor(d.getMonth() / 3);
-            if (tq !== q || d.getFullYear() !== now.getFullYear()) return false;
-            break;
-          }
-          case 'this_year':
-            if (d.getFullYear() !== now.getFullYear()) return false;
-            break;
-          case 'last_year':
-            if (d.getFullYear() !== now.getFullYear() - 1) return false;
-            break;
-          case 'all':
-            // No date filter
-            break;
-          case 'specific_month': {
-            if (!specificMonth) return false;
-            const [year, month] = specificMonth.split('-').map(Number);
-            if (d.getMonth() !== month - 1 || d.getFullYear() !== year) return false;
-            break;
-          }
-        }
-        // Category
-        if (categoryFilter !== 'all' && tx.categoryId !== categoryFilter) return false;
-        // Account
-        if (accountFilter !== 'all' && tx.fromAccountId !== accountFilter && tx.toAccountId !== accountFilter) return false;
-        // Search
-        if (search && !(tx.description ?? '').toLowerCase().includes(search.toLowerCase())) return false;
-        return true;
-      })
-      .sort((a, b) => new Date(b.occurredOn).getTime() - new Date(a.occurredOn).getTime());
-  }, [transactions, dateFilter, specificMonth, categoryFilter, accountFilter, search]);
+    // Los filtros vienen de la URL (fuente de verdad): en CARGA FRÍA
+    // (`/?view=transactions&category=...&from=...`) ya se aplican en el
+    // primer render — no hay estado local que inicializar.
+    return applyTransactionFilters(transactions, filters, {
+      categoryActive: categoryIsActive,
+      accountActive: accountIsActive,
+    });
+  }, [transactions, filters, categoryIsActive, accountIsActive]);
 
   // Group by day
   const grouped = useMemo(() => {
@@ -135,6 +165,24 @@ export function TransactionsView() {
     return { income, expenses, count: filtered.length };
   }, [filtered, baseCurrency]);
 
+  /** Escribe un cambio de filtro en la URL (sin tocar el resto). */
+  function patchFilters(patch: Partial<TransactionFilters>) {
+    applyFilters({ ...filters, ...patch });
+  }
+
+  /** Cambia el periodo a un preset (o a un rango personalizado). */
+  function handlePeriodChange(value: string) {
+    const preset = value as DateFilterPreset;
+    if (preset === 'custom') {
+      // Rango personalizado: hoy→hoy (luego el usuario ajusta los campos).
+      const today = toLocalDateString(now);
+      patchFilters({ from: today, to: today });
+      return;
+    }
+    const range = presetToRange(preset, now);
+    patchFilters({ from: range.from, to: range.to });
+  }
+
   function exportFiltered(format: 'csv' | 'json') {
     if (filtered.length === 0) { toast.error(t['transactions.noTransactionsToExport']); return; }
     const ctx = { categories, accounts, locale, baseCurrency: baseCurrency as CurrencyCode };
@@ -145,7 +193,17 @@ export function TransactionsView() {
       prefix: 'finzen-filtered',
       envelope: {
         exportedAt: new Date().toISOString(),
-        filterApplied: { dateFilter, categoryFilter, search },
+        // Envelope ADITIVO: conserva dateFilter/categoryFilter/search y añade
+        // accountFilter/type/from/to (convención 10-U4).
+        filterApplied: {
+          dateFilter: datePreset,
+          categoryFilter: filters.categoryId ?? 'all',
+          search: filters.query,
+          accountFilter: filters.accountId ?? 'all',
+          type: filters.type ?? 'all',
+          from: filters.from,
+          to: filters.to,
+        },
       },
     });
     toast.success(
@@ -193,7 +251,25 @@ export function TransactionsView() {
         <StatCard className="p-3" label="#" value={String(totals.count)} scale="sm" />
       </StatGrid>
 
-      {/* Filters */}
+      {/* Filtro colgante — la categoría/cuenta ya no existe: se avisa y se ofrece quitarla */}
+      {hasDanglingFilter && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-foreground"
+        >
+          <span>{t['transactions.danglingFilter']}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 min-h-9 text-xs"
+            onClick={clearFilters}
+          >
+            {t['transactions.removeFilters']}
+          </Button>
+        </div>
+      )}
+
+      {/* Filters — todos escriben en la URL (fuente de verdad) */}
       <Card className="p-3 space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -201,12 +277,13 @@ export function TransactionsView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t['transactions.search']}
+            aria-label={t['transactions.search']}
             className="pl-9 h-10"
           />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 *:min-w-0">
-          <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
-            <SelectTrigger className="h-9 text-xs w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 *:min-w-0">
+          <Select value={datePreset} onValueChange={handlePeriodChange}>
+            <SelectTrigger className="h-9 text-xs w-full" aria-label={t['transactions.filterPeriod']}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -216,24 +293,44 @@ export function TransactionsView() {
               <SelectItem value="this_year">{t['transactions.thisYear']}</SelectItem>
               <SelectItem value="last_year">{t['transactions.lastYear']}</SelectItem>
               <SelectItem value="all">{t['common.all']}</SelectItem>
-              <SelectItem value="specific_month">{t['transactions.specificMonth']}</SelectItem>
+              <SelectItem value="custom">{t['transactions.customRange']}</SelectItem>
             </SelectContent>
           </Select>
-          {dateFilter === 'specific_month' && (
-            <Input
-              type="month"
-              value={specificMonth}
-              onChange={(e) => setSpecificMonth(e.target.value)}
-              className="h-9 text-xs w-auto"
-            />
-          )}
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="h-9 text-xs w-full">
+          <Select
+            value={filters.type ?? 'all'}
+            onValueChange={(v) =>
+              patchFilters({ type: v === 'all' ? null : (v as TransactionTypeFilter) })
+            }
+          >
+            <SelectTrigger className="h-9 text-xs w-full" aria-label={t['transactions.filterType']}>
+              <SelectValue placeholder={t['transactions.allTypes']} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t['transactions.allTypes']}</SelectItem>
+              <SelectItem value="income">{t['transactions.typeIncome']}</SelectItem>
+              <SelectItem value="expense">{t['transactions.typeExpense']}</SelectItem>
+              <SelectItem value="transfer">{t['transactions.typeTransfer']}</SelectItem>
+              <SelectItem value="adjustment">{t['transactions.typeAdjustment']}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={categorySelectValue}
+            onValueChange={(v) => patchFilters({ categoryId: v === 'all' ? null : v })}
+          >
+            {/* Nombre accesible GENÉRICO: el valor seleccionado se anuncia
+                aparte (un `aria-label` con "Todas las categorías" pisaba el
+                valor real). */}
+            <SelectTrigger className="h-9 text-xs w-full" aria-label={t['transactions.filterCategory']}>
               <Filter className="w-3 h-3 mr-1" />
               <SelectValue placeholder={t['transactions.allCategories']} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t['transactions.allCategories']}</SelectItem>
+              {pendingCategoryId && (
+                <SelectItem value={pendingCategoryId} disabled>
+                  {t['a11y.loadingPanel']}
+                </SelectItem>
+              )}
               {categories.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.icon} {localizedCategoryName(c, locale)}
@@ -241,12 +338,21 @@ export function TransactionsView() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={accountFilter} onValueChange={setAccountFilter}>
-            <SelectTrigger className="h-9 text-xs w-full">
+          <Select
+            value={accountSelectValue}
+            onValueChange={(v) => patchFilters({ accountId: v === 'all' ? null : v })}
+          >
+            {/* Nombre accesible GENÉRICO (no pisa el valor seleccionado). */}
+            <SelectTrigger className="h-9 text-xs w-full" aria-label={t['transactions.filterAccount']}>
               <SelectValue placeholder={t['transactions.allAccounts']} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t['transactions.allAccounts']}</SelectItem>
+              {pendingAccountId && (
+                <SelectItem value={pendingAccountId} disabled>
+                  {t['a11y.loadingPanel']}
+                </SelectItem>
+              )}
               {accounts.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
                   {a.name}
@@ -255,6 +361,28 @@ export function TransactionsView() {
             </SelectContent>
           </Select>
         </div>
+        {datePreset === 'custom' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 *:min-w-0">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">{t['transactions.from']}</span>
+              <Input
+                type="date"
+                value={filters.from ?? ''}
+                onChange={(e) => patchFilters({ from: e.target.value || null })}
+                className="h-9 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">{t['transactions.to']}</span>
+              <Input
+                type="date"
+                value={filters.to ?? ''}
+                onChange={(e) => patchFilters({ to: e.target.value || null })}
+                className="h-9 text-xs"
+              />
+            </label>
+          </div>
+        )}
       </Card>
 
       {/* List */}
@@ -276,6 +404,14 @@ export function TransactionsView() {
                 onClick: () => setAddSheetOpen(true),
                 icon: <Plus className="w-4 h-4 mr-1" />,
               }}
+            />
+          ) : hasActiveFilters(filters) ? (
+            <EmptyState
+              surface="plain"
+              className="text-center text-sm text-muted-foreground py-12"
+              titleAs="p"
+              titleClassName="text-sm font-normal text-muted-foreground mb-0"
+              title={t['transactions.noResultsForFilters']}
             />
           ) : (
             <EmptyState

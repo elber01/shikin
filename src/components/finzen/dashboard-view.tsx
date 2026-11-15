@@ -30,8 +30,13 @@ import {
   computeDelta,
   type MonthlyFlow,
 } from '@/lib/finzen/finance';
-import { intlLocale, localizedCategoryName, localizedPair } from '@/lib/finzen/localize';
+import { intlLocale, localizedCategoryName, localizedPair, filterPeriodLabel } from '@/lib/finzen/localize';
 import { categoryColorVar } from '@/lib/finzen/category-color';
+import {
+  EMPTY_TRANSACTION_FILTERS,
+  monthKeyRange,
+  type TransactionFilters,
+} from '@/lib/finzen/transaction-filters';
 import { KpiCard } from '@/components/finzen/kpi-card';
 import { StatGrid } from '@/components/finzen/ui/stat-grid';
 import { EmptyState } from '@/components/finzen/ui/empty-state';
@@ -79,6 +84,19 @@ export function DashboardView() {
   // Primitivos derivados — deps estables para los memos de abajo
   const viewYear = viewDate.getFullYear();
   const viewMonth = viewDate.getMonth();
+
+  // ── Drill-down (convención 10-U4): el destino es SIEMPRE `?view=transactions`
+  //    con filtros en la URL. El periodo del drill-down es el mes que se está
+  //    viendo (el MISMO que usa los KPIs y el donut).
+  const viewMonthKey = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+  const viewRange = monthKeyRange(viewMonthKey);
+  const viewPeriodLabel = filterPeriodLabel(viewRange?.from ?? null, viewRange?.to ?? null, locale);
+
+  function drillDownToTransactions(next: Partial<TransactionFilters>) {
+    navigate('transactions', {
+      filters: { ...EMPTY_TRANSACTION_FILTERS, ...next },
+    });
+  }
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -143,6 +161,7 @@ export function DashboardView() {
       .map(([catId, amount]) => {
         const cat = categories.find((c) => c.id === catId);
         return {
+          categoryId: catId,
           name: cat ? localizedCategoryName(cat, locale) : t['common.other'],
           value: amount,
           color: categoryColorVar(cat?.color),
@@ -280,14 +299,35 @@ export function DashboardView() {
             deltaTone={netWorthDelta === undefined || netWorthDelta >= 0 ? 'positive' : 'negative'}
             size="hero"
             sparkData={transactions.length > 0 ? netWorthHistory : undefined}
+            sparklineLabel={t['a11y.chart.netWorthTrend']}
             color="primary"
             variant="gradient"
           />
 
-          {/* Three KPI cards — deltas reales vs mes anterior */}
+          {/* Three KPI cards — deltas reales vs mes anterior.
+              Los agregados COMPUESTOS (patrimonio neto, ratio de ahorro) NO son
+              clicables: no hay un destino real detrás (convención 10-U4). */}
           <StatGrid scale="md">
             <KpiCard
               label={t['dashboard.income']}
+              labelAction={
+                <button
+                  type="button"
+                  onClick={() =>
+                    drillDownToTransactions({
+                      type: 'income',
+                      from: viewRange?.from ?? null,
+                      to: viewRange?.to ?? null,
+                    })
+                  }
+                  aria-label={t['drilldown.incomeToTransactions']
+                    .replace('{amount}', formatMoney(totals.income, baseCurrency as CurrencyCode, locale))
+                    .replace('{period}', viewPeriodLabel)}
+                  className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors text-left min-h-11 py-1"
+                >
+                  {t['dashboard.income']}
+                </button>
+              }
               amount={formatMoney(totals.income, baseCurrency, locale)}
               delta={formatDelta(incomeDelta)}
               deltaDirection={incomeDelta === undefined ? 'neutral' : incomeDelta >= 0 ? 'up' : 'down'}
@@ -296,6 +336,24 @@ export function DashboardView() {
             />
             <KpiCard
               label={t['dashboard.expenses']}
+              labelAction={
+                <button
+                  type="button"
+                  onClick={() =>
+                    drillDownToTransactions({
+                      type: 'expense',
+                      from: viewRange?.from ?? null,
+                      to: viewRange?.to ?? null,
+                    })
+                  }
+                  aria-label={t['drilldown.expenseToTransactions']
+                    .replace('{amount}', formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale))
+                    .replace('{period}', viewPeriodLabel)}
+                  className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors text-left min-h-11 py-1"
+                >
+                  {t['dashboard.expenses']}
+                </button>
+              }
               amount={formatMoney(totals.expenses, baseCurrency, locale)}
               delta={formatDelta(expensesDelta)}
               deltaDirection={expensesDelta === undefined ? 'neutral' : expensesDelta >= 0 ? 'up' : 'down'}
@@ -323,7 +381,11 @@ export function DashboardView() {
               </span>
             </div>
             <div className="h-56 sm:h-64 w-full overflow-x-auto scroll-area">
-              <div className="h-full min-w-0">
+              <div
+                className="h-full min-w-0"
+                role="img"
+                aria-label={t['a11y.chart.cashFlow'].replace('{n}', String(cashFlowData.length))}
+              >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={cashFlowData} barGap={2}>
                   <XAxis
@@ -379,6 +441,11 @@ export function DashboardView() {
               {categoryBreakdown.length > 0 ? (
                 <>
                   <div className="h-48 relative">
+                    <div
+                      className="h-full w-full"
+                      role="img"
+                      aria-label={t['a11y.chart.expenseDistribution']}
+                    >
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -405,6 +472,7 @@ export function DashboardView() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
+                    </div>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                       <span className="text-xs text-muted-foreground">{t['dashboard.expenses']}</span>
                       <span className="text-xl font-bold tabular-nums">
@@ -414,7 +482,29 @@ export function DashboardView() {
                   </div>
                   <div className="mt-3 space-y-1.5">
                     {categoryBreakdown.slice(0, 4).map((c) => (
-                      <div key={c.name} className="flex items-center gap-2 text-xs">
+                      <button
+                        key={c.categoryId}
+                        type="button"
+                        onClick={() =>
+                          drillDownToTransactions({
+                            categoryId: c.categoryId,
+                            // El importe de la leyenda suma SOLO gastos → el
+                            // destino acota por tipo (mismo conjunto abierto
+                            // que el número mostrado).
+                            type: 'expense',
+                            from: viewRange?.from ?? null,
+                            to: viewRange?.to ?? null,
+                          })
+                        }
+                        aria-label={t['drilldown.categoryToTransactions']
+                          .replace('{category}', c.name)
+                          .replace(
+                            '{amount}',
+                            formatMoney(c.value, baseCurrency as CurrencyCode, locale)
+                          )
+                          .replace('{period}', viewPeriodLabel)}
+                        className="w-full flex items-center gap-2 text-xs rounded-md px-1 py-2 hover:bg-surface-2 transition-colors text-left min-h-11"
+                      >
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
                           style={{ background: c.color }}
@@ -425,7 +515,7 @@ export function DashboardView() {
                         <span className="tabular-nums text-muted-foreground">
                           {((c.value / totals.expenses) * 100).toFixed(0)}%
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </>

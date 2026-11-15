@@ -75,9 +75,9 @@
 | **Flujo multiagente coordinador→planificador→implementador→revisor** | El coordinador orquesta y es el único que cierra (harness + memoria); roles materializados como agentes de opencode con permisos (planificador/revisor read-only) | `.opencode/agent/`, `agent.md` §4 |
 | **Consola de agentes: multiusuario y endpoint OpenAI-compatible** (decidido por el dueño 12-nov-2026, **no implementado todavía**) | La clave del proveedor LLM será **por usuario** (cifrada en reposo, con cuotas) → aísla a cada usuario y permite revocar por separado, a costa de duplicar el alcance de la fase de agentes. El cliente será un **endpoint compatible con OpenAI** (`LLM_BASE_URL` configurable) → una sola implementación de streaming + tool-calls cubre Anthropic vía gateway, OpenAI, Groq y modelos locales, sin acoplar el código a un vendor y **sin dependencias nuevas** (`fetch` nativo + `zod` ya instalado) | `MEMORY.md` §4 (sesión 12-nov-2026), `worklog.md` PHASE 10 |
 
-## 4. Estado actual (14-nov-2026)
+## 4. Estado actual (15-nov-2026)
 
-**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + build + copia portable a standalone. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd` (instalado con `npm install --no-save --no-package-lock bun`; `package.json` y lockfiles intactos salvo las purgas aprobadas). E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`, desplegada: build id `oHDUufpsKCny2Xep00Hs2`).
+**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + **test** + build + copia portable a standalone. Desde 10-U4 el harness incluye **Vitest** (`bun run test`): **178 tests / 14 ficheros**. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd`. E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`, desplegada: build id `oHDUufpsKCny2Xep00Hs2`).
 
 **✅ MIGRACIÓN DE COLORES EN TURSO EJECUTADA (14-nov-2026):** con el visto bueno del dueño y la `DATABASE_URL` facilitada por él, `scripts/migrate-category-colors.ts` corrió contra producción: dry-run → apply → control. **95/95 categorías migradas** de HEX a claves `cat-N` (13 sin color intactas, 0 ya en token antes). Backup en `db/category-colors.2026-11-14T20-32-27-727Z.backup` (gitignored). Dry-run de control: 0 pendientes. La BD de prod ya cumple la convención 10-U1. **Acción pendiente de Edwin: rotar el token de Turso** (es una credencial de escritura que pasó por el chat).
 
@@ -86,6 +86,20 @@
 **✅ 10-U2 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `1d65cc8` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `oHDUufps…` → `me4LhKJ06tWs_1A_jJn4H`; `/login` y `/` → 200). Working tree limpio. 10-U1 = `821ee87` (commiteada, pusheada y desplegada) · 10-U0 = `7a53c1f` (commiteada, pusheada y desplegada).
 
 **✅ 10-U3 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `e95c9ab` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `OyfVzV_GhlmJsZfBn6qDg`; `/login` y `/` → 200). Working tree limpio. 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
+
+Sesión 15-nov-2026 (10-U4 — drill-down + Vitest; flujo coordinador→planificador→implementador→revisor; **3 revisiones**, todas **APRUEBA**, 0 bloqueantes; cierra el bloque UI U0→U4):
+- **Alcance:** 8 pasos atómicos (spec → infra Vitest → P0 tests undo → P1 dominio puro → núcleo puro del drill-down → cableado → superficies → P2/P3). Deja lista la **red de tests** que desbloquea el bloque de agentes.
+- **Spec primero (coordinador):** `SDD.md` §1 (viñeta "Filtros y drill-down (10-U4)"), §2 (nota U4: `/api/v1/*` intacto), §5 **convención 10** (drill-down y filtros en URL), §6 (Fase 0 con Vitest adelantado), §7.1 (deuda "cero tests" → parcialmente resuelta); `skills.md` §1/§3 (verificaciones Vitest), §6 (recetas `transaction_drilldown`, `unit_test`, `verify_quality` → lint+typecheck+test+build, `view_deep_link` → canonicalización preserva params); `AGENTS.md` §3 (`bun run test`), §5 (dos subsecciones nuevas), §6 (mapa), §7 (prohibido tests contra `db/custom.db`/Turso). `agents/orchestrator.md` **sin cambios** (`git diff --exit-code` ⇒ 0).
+- **Decisión de criterio (aprobada por Edwin):** botón explícito dentro de la tarjeta KPI (no la tarjeta entera) y **sectores/barras de recharts NO interactivos** (un SVG no es operable por teclado) → el drill-down vive en la leyenda/lista con botones reales.
+- **Drill-down:** destino único `?view=transactions` con filtros `category`,`account`,`type`,`from`,`to`,`q`. **La URL es la fuente de verdad**: `transactions-view.tsx` eliminó sus 5 `useState` de filtro (solo queda el buffer del input de búsqueda con debounce 300 ms re-sincronizado). Parseo **total** (patrón `parseViewKey`): `type` fuera de enum, fecha inexistente o id malformado se descartan; `from > to` se invierte. Filtro colgante (categoría/cuenta que ya no existe) → aviso i18n `role="status"` + CTA "Quitar filtros" y ese filtro queda **inactivo**. 8 destinos cableados: Dashboard KPI Ingresos/Gastos, leyenda del donut, Reportes totales (ingresos/gastos) y top categorías, fila de presupuesto y nombre de cuenta. **NO clicables** (honestidad de datos): patrimonio neto, ratio de ahorro, ahorro neto y total de presupuesto.
+- **Módulos puros nuevos:** `src/lib/finzen/transaction-filters.ts` (parse/serialize + `applyTransactionFilters` + `resolveFilterActivation` + `resolveSelectFilterValue`), `src/lib/finzen/view-href.ts` (`buildViewHref` + `replaceViewParamInSearch`), `src/lib/finzen/budget-period.ts` (`budgetPeriodRange`), `src/hooks/use-transaction-filters.ts`, y `navigate(view, { filters, replace })` en `use-view-navigation.ts`.
+- **Accesibilidad:** todo drill-down es un `<button type="button">` real (0 `<div onClick>`, 0 `role="button"`, 0 botones anidados) con `aria-label` i18n **con el dato real** (categoría/cuenta + importe + periodo); los contenedores recharts llevan `role="img"` + `aria-label`; targets ≥44 px.
+- **Coherencia número↔destino (la trampa que se corrigió):** el `spent` de un presupuesto calculaba contra el mes actual mientras el presupuesto tiene su propio `startDate/endDate` → ahora cálculo y destino usan **el mismo rango completo** (`budgetPeriodRange`), y el destino de presupuestos/donut/top categorías añade `type:'expense'` → la igualdad es **estructural**, no por convención.
+- **Vitest:** **5.1.0 sobre Node** (decidido con argumentos: `bun test` colisiona con `*.test.ts` y contradice la spec; Vitest no soporta Bun como runtime; Node 26 está en el entorno). `vitest.config.mts` separado (Node, `globals:false`, alias `@/`, sin jsdom/coverage/Playwright) + `tests/setup.ts` + `tests/global-setup.ts`. **178 tests / 14 ficheros**: P0 (recibo HMAC + `undo-service` con fake de BD que **registra escrituras** → se afirma "0 escrituras" en los caminos de error), P1 (category-color, views, currency, finance, export), P2 (paridad i18n **con placeholders** + contrato v1), P3 (servicios contra un **SQLite temporal**, DDL de `prisma migrate diff`, borrado al final) + contrato estático del drill-down.
+- **🔴 Guardarraíl del lockfile (primera dependencia nueva del programa):** `bun.lock` 653→717 entradas, **0 paquetes eliminados**, 64 añadidos (solo ecosistema vitest/vite/rolldown/oxc), **0 dependencias de runtime cambiadas**. Los "21 cambios de versión" que parecían deletes son **artefactos de hoisting** (los paquetes old siguen presentes, anidados bajo su consumidor); la **única arista real** es `fdir > picomatch 4.0.3→4.0.7`, **inevitable** (`vitest@5.1.0` exige `picomatch ^4.0.7` y `vite@8.3.8` exige `lightningcss ^1.33.0`) y semver-compatible. `package.json` solo trae 3 devDeps + 2 scripts + `verify`.
+- **Aislamiento de BD:** los tests **nunca** tocan `db/custom.db` ni Turso (`DATABASE_URL` se sobreescribe con un `file:` temporal y hay fail-fast si no es `file:`); `db/custom.db` con **hash y mtime idénticos** antes/después de la corrida.
+- **Verificación:** `bun run verify` exit 0 (lint + typecheck + 178 tests + build, 25 rutas) en el cierre del coordinador y en las 3 revisiones. i18n **491 es / 491 en**, 0 faltantes, 0 sobrantes, 0 duplicados, **0 placeholders discordantes**. Intactos: `prisma/schema.prisma`, **`src/app/api/v1/**`**, `src/lib/auth/**` (solo el test nuevo), `src/lib/db.ts`, `finance.ts`, `src/components/ui/**`, `agents/orchestrator.md`. 0 `as any` nuevos, 0 HEX nuevos.
+- **Desviaciones aceptadas:** `kpi-card.tsx` y `ui/stat-card.tsx` (prop `labelAction` → el drill-down es el botón del *nombre*; son componentes **propios** del repo, no `components/ui/*`) y `localize.ts` (`filterPeriodLabel` para los `aria-label`). Se aplicó además el patrón `type:'expense'` al donut y a top categorías (no solo a presupuestos) porque ahí también había desajuste real entre el número mostrado y el destino.
 
 Sesión 14-nov-2026 (10-U3 — deshacer + límites de error; flujo coordinador→planificador→implementador→revisor; **el revisor rechazó la primera entrega** por 3 bloqueantes de seguridad y la segunda revisión fue **APRUEBA**, 0 bloqueantes):
 - **Alcance:** 5 pasos atómicos, cada uno con `bun run verify` en verde. Cierra la deuda #18 (`apiFetch<T>`).
@@ -522,11 +536,30 @@ pendiente de repoint (§5).
     (color crudo). Es preexistente y la primitiva es estándar: se acepta como
     deuda documentada (mismo criterio que #16). Si el dueño autoriza tocar
     `src/components/ui/*`, el fix es un wrapper propio o unPR con i18n.
-25. **Sin tests automatizados** (deuda global, ya citada en `SDD.md` §7.1):
-    la lógica de 10-U2 se verificó con harness + sonda anti-drift + humo
-    manual + un test temporal fuera del repo (4 asserts sobre el historial de
-    `navigate()`). La red de seguridad real llega en **10-U4 (Vitest)** —
-    es el blocker del bloque de agentes (multi-tenant).
+25. ~~**Sin tests automatizados**~~ **RESUELTO en 10-U4 (15-nov-2026):** Vitest
+    5.1.0 sobre Node, `bun run test` integrado en `bun run verify`
+    (lint + typecheck + **test** + build). **178 tests / 14 ficheros**: P0
+    (recibo HMAC + `undo-service` con fake de BD que registra escrituras),
+    P1 (dominio puro), P2 (paridad i18n con placeholders + contrato v1),
+    P3 (servicios contra un SQLite temporal). La lógica de 10-U2 se verificó
+    antes con harness + sonda anti-drift + humo manual + un test temporal
+    fuera del repo.
+28. **Lo que falta de red de tests (deuda residual de 10-U4):** (a) **E2E de
+    navegador (Playwright)** — no hay CI en el repo (`.github/` no existe) ni
+    tests de componentes (no hay `jsdom` a propósito); (b) **cobertura con
+    umbral** — no activada (`@vitest/coverage-v8` no se instaló a propósito);
+    (c) `vitest.config.mts` queda **fuera** del type-check de `tsc`
+    (`tsconfig.include` = `**/*.ts`/`**/*.tsx` y la spec de U4 prohíbe tocar
+    `tsconfig.json`) → ESLint sí lo cubre, pero `tsc` no; los **tests** (`.ts`)
+    sí entran en `tsc --noEmit` y en el type-check de `next build`.
+29. **El drill-down depende de que el número mostrado y el destino coincidan.**
+    La coherencia presupuesto↔destino se garantizó estructuralmente (misma
+    función `budgetPeriodRange` + mismo `type:'expense'`), pero cualquier
+    nueva superficie de drill-down debe respetar el mismo invariante: si el
+    importe mostrado y el conjunto que abre el destino se calculan distinto,
+    el usuario ve una cifra y aterriza en otra. Hay un test de contrato
+    estático (`drilldown-contract.test.ts`) que cubre las superficies
+    actuales; **añadirlo al tocar nuevas vistas**.
 26. **El undo de 10-U3 es efímero por diseño:** el snapshot vive solo en
     memoria, así que **no se puede deshacer tras recargar, cerrar la pestaña
     o cerrar sesión**, ni desde otro dispositivo, y solo hay **una** acción
@@ -606,6 +639,29 @@ pendiente de repoint (§5).
   "el parámetro cambió" → flicker. Patrón usado en 10-U2: `paramChanged` +
   `router.replace` para canonicalizar (nunca `push` → el botón "atrás" no
   queda atrapado).
+- **En `bun.lock`, un `-` en el diff no es una eliminación** (15-nov-2026): al
+  instalar Vitest, `git diff bun.lock` mostró 21 paquetes "eliminados"
+  (`lightningcss`, `magic-string`, `tinyglobby`…) que en realidad **siguen
+  presentes**, solo reubicados/anidados por el hoisting de bun. Medir el
+  grafo real (instancia `name@version` + `bundled:true`) antes de declarar un
+  guardarraíl incumplido: los *slots* del lockfile no son las dependencias
+  reales. Lo que sí era real: `fdir > picomatch 4.0.3→4.0.7`, **inevitable**
+  porque `vitest@5.1.0` exige `picomatch ^4.0.7`. Regla: **0 eliminados +
+  0 deps de runtime cambiadas** es el invariante útil; "0 cambios de versión
+  de slots" es demasiado estricto y produce falsos positivos.
+- **Tests de "nada que ver" hay que mirarlos con lupa:** un `expect` sobre una
+  constante re-declarada en el propio test, o un escaneo estático que no
+  cubre el caso real, pasa en verde sin comprobar nada. En 10-U4 el revisor
+  exigió que el escaneo del contrato v1 fallara ante `error: 'NotFound'` y
+  que el fake de BD **registrara escrituras** (para poder afirmar "0
+  escrituras" en los caminos de error del undo). Regla: todo test de
+  seguridad debe poder **fallar** ante el bug que previene (probarse en
+  negativo).
+- **Un reinicio del servidor puede cortar un subagente a mitad:** la
+  herramienta devuelve error pero el subagente **sigue habiendo escrito
+  código** (en U4 dejó la fase a medio hacer). Al recuperar: **auditar el
+  working tree antes de volver a delegar** (`git status --short` + `bun run
+  verify`) y continuar desde el estado real, no relanzar a ciegas.
 
 ## 7. Personas y contexto
 

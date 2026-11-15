@@ -31,8 +31,14 @@ import {
   exportTransactionsCsv,
   exportTransactionsJson,
 } from '@/lib/finzen/export';
-import { intlLocale, localizedCategoryName } from '@/lib/finzen/localize';
+import { intlLocale, localizedCategoryName, filterPeriodLabel } from '@/lib/finzen/localize';
 import { categoryColorVar } from '@/lib/finzen/category-color';
+import {
+  EMPTY_TRANSACTION_FILTERS,
+  monthKeyRange,
+  type TransactionFilters,
+} from '@/lib/finzen/transaction-filters';
+import { useViewNavigation } from '@/hooks/use-view-navigation';
 import { StatCard } from '@/components/finzen/ui/stat-card';
 import { StatGrid } from '@/components/finzen/ui/stat-grid';
 import { EmptyState } from '@/components/finzen/ui/empty-state';
@@ -48,6 +54,7 @@ function monthKey(d: Date): string {
 export function ReportsView() {
   const { transactions, categories, accounts, locale, baseCurrency, setAddSheetOpen } = useFinZenStore();
   const t = translations[locale];
+  const navigate = useViewNavigation();
 
   const [range, setRange] = useState<Range>('1y');
 
@@ -113,6 +120,7 @@ export function ReportsView() {
       .map(([id, amount]) => {
         const cat = categories.find((c) => c.id === id);
         return {
+          categoryId: id,
           name: cat ? localizedCategoryName(cat, locale) : t['common.other'],
           icon: cat?.icon ?? '📦',
           color: categoryColorVar(cat?.color),
@@ -123,6 +131,22 @@ export function ReportsView() {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
   }, [filteredTx, categories, baseCurrency, locale, totals, t]);
+
+  // ── Drill-down (convención 10-U4): el rango del periodo es el MISMO que
+  //    usa el gráfico y los totales (una sola fuente de verdad).
+  const periodRange = useMemo(() => {
+    if (flows.length === 0) return { from: null, to: null };
+    const first = monthKeyRange(flows[0].key);
+    const last = monthKeyRange(flows[flows.length - 1].key);
+    return { from: first?.from ?? null, to: last?.to ?? null };
+  }, [flows]);
+  const periodLabel = filterPeriodLabel(periodRange.from, periodRange.to, locale);
+
+  function drillDownToTransactions(next: Partial<TransactionFilters>) {
+    navigate('transactions', {
+      filters: { ...EMPTY_TRANSACTION_FILTERS, ...next },
+    });
+  }
 
   const chartData = useMemo(() => {
     const intl = intlLocale(locale);
@@ -187,6 +211,7 @@ export function ReportsView() {
             {(['6m', '1y', 'all'] as const).map((r) => (
               <button
                 key={r}
+                type="button"
                 onClick={() => setRange(r)}
                 className={`px-3 h-9 text-xs font-medium transition-colors ${
                   range === r ? 'bg-primary text-primary-foreground' : 'hover:bg-surface-2'
@@ -215,10 +240,32 @@ export function ReportsView() {
         </div>
       </div>
 
-      {/* Totals */}
+      {/* Totales — Ingresos y Gastos son drill-down; el ahorro neto es un
+          agregado COMPUESTO y NO es clicable (convención 10-U4). */}
       <StatGrid scale="md">
         <StatCard
           label={t['reports.totalIncome']}
+          labelAction={
+            <button
+              type="button"
+              onClick={() =>
+                drillDownToTransactions({
+                  type: 'income',
+                  from: periodRange.from,
+                  to: periodRange.to,
+                })
+              }
+              aria-label={t['drilldown.incomeToTransactions']
+                .replace(
+                  '{amount}',
+                  formatMoney(totals.income, baseCurrency as CurrencyCode, locale)
+                )
+                .replace('{period}', periodLabel)}
+              className="uppercase tracking-wide text-left hover:text-foreground transition-colors min-h-11 py-1"
+            >
+              {t['reports.totalIncome']}
+            </button>
+          }
           value={formatMoney(totals.income, baseCurrency as CurrencyCode, locale)}
           tone="income"
           labelClassName="uppercase tracking-wide"
@@ -226,6 +273,27 @@ export function ReportsView() {
         />
         <StatCard
           label={t['reports.totalExpenses']}
+          labelAction={
+            <button
+              type="button"
+              onClick={() =>
+                drillDownToTransactions({
+                  type: 'expense',
+                  from: periodRange.from,
+                  to: periodRange.to,
+                })
+              }
+              aria-label={t['drilldown.expenseToTransactions']
+                .replace(
+                  '{amount}',
+                  formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)
+                )
+                .replace('{period}', periodLabel)}
+              className="uppercase tracking-wide text-left hover:text-foreground transition-colors min-h-11 py-1"
+            >
+              {t['reports.totalExpenses']}
+            </button>
+          }
           value={formatMoney(totals.expenses, baseCurrency as CurrencyCode, locale)}
           tone="expense"
           labelClassName="uppercase tracking-wide"
@@ -245,7 +313,11 @@ export function ReportsView() {
       <Card className="p-5">
         <h2 className="text-lg font-semibold mb-4">{t['reports.incomeVsExpenses']}</h2>
         <div className="h-60 sm:h-72 w-full overflow-x-auto scroll-area">
-          <div className="h-full min-w-0">
+          <div
+            className="h-full min-w-0"
+            role="img"
+            aria-label={t['a11y.chart.incomeVsExpenses']}
+          >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -302,14 +374,35 @@ export function ReportsView() {
             <p className="text-sm text-muted-foreground py-4">{t['reports.noExpenses']}</p>
           )}
           {topCategories.map((cat, i) => (
-            <div key={cat.name} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
+            <div key={cat.categoryId} className="space-y-1">
+              <div className="flex items-center justify-between text-sm gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    drillDownToTransactions({
+                      categoryId: cat.categoryId,
+                      // El importe de la categoría suma SOLO gastos → el
+                      // destino acota por tipo (mismo conjunto abierto que el
+                      // número mostrado).
+                      type: 'expense',
+                      from: periodRange.from,
+                      to: periodRange.to,
+                    })
+                  }
+                  aria-label={t['drilldown.categoryToTransactions']
+                    .replace('{category}', cat.name)
+                    .replace(
+                      '{amount}',
+                      formatMoney(cat.amount, baseCurrency as CurrencyCode, locale)
+                    )
+                    .replace('{period}', periodLabel)}
+                  className="flex items-center gap-2 text-left rounded-md px-1 py-2 hover:bg-surface-2 transition-colors min-h-11 min-w-0"
+                >
                   <span className="text-xs font-bold text-muted-foreground w-4">{i + 1}.</span>
                   <span>{cat.icon}</span>
                   <span className="font-medium">{cat.name}</span>
-                </span>
-                <span className="tabular-nums text-muted-foreground">
+                </button>
+                <span className="tabular-nums text-muted-foreground shrink-0">
                   {formatMoney(cat.amount, baseCurrency as CurrencyCode, locale)} · {cat.pct.toFixed(0)}%
                 </span>
               </div>

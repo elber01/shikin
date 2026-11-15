@@ -10,8 +10,15 @@ import { Lightbulb, Target, Plus, Pencil, Trash2 } from 'lucide-react';
 import { ApiError, useFinZenStore } from '@/store/finzen-store';
 import { translations } from '@/lib/finzen/i18n';
 import { convertAmount, formatMoney, CURRENCIES, type CurrencyCode } from '@/lib/finzen/currency';
-import { localizedCategoryName } from '@/lib/finzen/localize';
+import { localizedCategoryName, filterPeriodLabel } from '@/lib/finzen/localize';
 import { categoryColorVar } from '@/lib/finzen/category-color';
+import {
+  applyTransactionFilters,
+  EMPTY_TRANSACTION_FILTERS,
+  type TransactionFilters,
+} from '@/lib/finzen/transaction-filters';
+import { budgetPeriodRange } from '@/lib/finzen/budget-period';
+import { useViewNavigation } from '@/hooks/use-view-navigation';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/finzen/ui/empty-state';
 import { IconButton } from '@/components/finzen/ui/icon-button';
@@ -25,6 +32,7 @@ export function BudgetsView() {
   const { budget, transactions, categories, locale, baseCurrency, addBudgetItem, updateBudgetItem, deleteBudgetItem } = useFinZenStore();
   const t = translations[locale];
   const { offerUndo } = useUndo();
+  const navigate = useViewNavigation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState('');
@@ -86,16 +94,60 @@ export function BudgetsView() {
     }
   }
 
+  /**
+   * Periodo ÚNICO del presupuesto (convención 10-U4): el MISMO rango se usa en
+   * el cálculo de `spent` y en el destino del drill-down. Si divergieran, el
+   * usuario vería un gasto que no corresponde al periodo del destino.
+   *
+   * Un presupuesto que ABARCA varios meses usa su rango COMPLETO
+   * (`startDate`…`endDate`): el importe mostrado refleja todo el presupuesto.
+   * Si `endDate` falta o es incoherente, cae al mes natural de `startDate`.
+   */
+  const budgetRange = useMemo(() => {
+    const now = new Date();
+    return budgetPeriodRange(budget?.startDate, budget?.endDate, now);
+  }, [budget]);
+  const budgetPeriodLabel = filterPeriodLabel(budgetRange.from, budgetRange.to, locale);
+
   const items = useMemo(() => {
     if (!budget) return [];
-    const now = new Date();
     return budget.items.map(item => {
       const cat = categories.find(c => c.id === item.categoryId);
-      const spent = transactions.filter(tx => tx.categoryId === item.categoryId && tx.type === 'expense' && (() => { const d = new Date(tx.occurredOn); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })()).reduce((s, tx) => s + convertAmount(tx.amount, tx.currency, baseCurrency as CurrencyCode), 0);
+      // El MISMO rango y la MISMA función que aplica el destino del drill-down:
+      // el número mostrado y el destino del drill-down no pueden divergir.
+      const spentTx = applyTransactionFilters(
+        transactions,
+        {
+          ...EMPTY_TRANSACTION_FILTERS,
+          categoryId: item.categoryId,
+          type: 'expense',
+          from: budgetRange.from,
+          to: budgetRange.to,
+        },
+        { categoryActive: true, accountActive: false }
+      );
+      const spent = spentTx.reduce((s, tx) => s + convertAmount(tx.amount, tx.currency, baseCurrency as CurrencyCode), 0);
       const planned = item.plannedAmount; const pct = planned > 0 ? (spent / planned) * 100 : 0;
       return { ...item, category: cat, spent, planned, pct, remaining: planned - spent };
     });
-  }, [budget, transactions, categories, baseCurrency]);
+  }, [budget, transactions, categories, baseCurrency, budgetRange]);
+
+  /**
+   * Drill-down a Transacciones con el MISMO periodo del presupuesto y el
+   * MISMO tipo que usa el cálculo de `spent` (SOLO gastos): así el conjunto
+   * que se abre es EXACTAMENTE el que se suma (igualdad estructural, no por
+   * convención de datos).
+   */
+  function drillDownToTransactions(next: Partial<TransactionFilters>) {
+    navigate('transactions', {
+      filters: {
+        ...EMPTY_TRANSACTION_FILTERS,
+        from: budgetRange.from,
+        to: budgetRange.to,
+        ...next,
+      },
+    });
+  }
 
   const totals = useMemo(() => { const s = items.reduce((a, i) => a + i.spent, 0); const p = items.reduce((a, i) => a + i.planned, 0); return { spent: s, planned: p, pct: p > 0 ? (s / p) * 100 : 0 }; }, [items]);
   const availableCategories = categories.filter(c => c.direction === 'expense' && !(budget?.items || []).some(i => i.categoryId === c.id));
@@ -136,7 +188,28 @@ export function BudgetsView() {
             return (
               <div key={item.id} className="p-3 rounded-lg border border-border hover:bg-surface-2 transition-colors">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 min-w-0"><CategoryIcon category={item.category} variant="bare" /><span className="text-sm font-medium truncate">{item.category ? localizedCategoryName(item.category, locale) : '—'}</span>{(isOver || isAppr) && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: isOver ? 'var(--expense-soft)' : 'var(--warning-soft)', color: isOver ? 'var(--expense)' : 'var(--warning)' }}>{isOver ? t['budgets.overBudget'] : t['budgets.approaching']}</span>}</div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CategoryIcon category={item.category} variant="bare" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        drillDownToTransactions({ categoryId: item.categoryId, type: 'expense' })
+                      }
+                      aria-label={t['drilldown.categoryToTransactions']
+                        .replace(
+                          '{category}',
+                          item.category ? localizedCategoryName(item.category, locale) : '—'
+                        )
+                        .replace(
+                          '{amount}',
+                          formatMoney(item.spent, baseCurrency as CurrencyCode, locale)
+                        )
+                        .replace('{period}', budgetPeriodLabel)}
+                      className="text-sm font-medium truncate rounded-md px-1 py-2 hover:bg-surface-2 transition-colors text-left min-h-11 min-w-0"
+                    >
+                      {item.category ? localizedCategoryName(item.category, locale) : '—'}
+                    </button>
+                    {(isOver || isAppr) && <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: isOver ? 'var(--expense-soft)' : 'var(--warning-soft)', color: isOver ? 'var(--expense)' : 'var(--warning)' }}>{isOver ? t['budgets.overBudget'] : t['budgets.approaching']}</span>}</div>
                   <div className="flex items-center gap-1 shrink-0">
                     <IconButton
                       icon={<Pencil className="w-3.5 h-3.5" />}

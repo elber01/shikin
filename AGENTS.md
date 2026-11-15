@@ -34,6 +34,7 @@ bun install              # dependencias
 bun run dev              # http://localhost:3000 (puerto 3000)
 bun run lint             # ESLint — DEBE pasar sin errores
 bun run typecheck         # tsc --noEmit — DEBE pasar sin errores
+bun run test             # Vitest — DEBE pasar sin errores
 bun run build            # build de producción (Next + standalone)
 bun run db:push          # aplica schema.prisma a DATABASE_URL
 bun run db:generate      # regenera cliente Prisma tras editar schema
@@ -42,12 +43,12 @@ bun run db:generate      # regenera cliente Prisma tras editar schema
 ### Checklist de verificación — OBLIGATORIO antes de dar por terminada cualquier tarea
 
 ```bash
-bun run lint && bun run typecheck && bun run build
+bun run lint && bun run typecheck && bun run test && bun run build
 ```
 
-Si algo falla, se arregla **antes** de cerrar la tarea. No existen tests
-automatizados todavía (ver deuda en `MEMORY.md`), así que esta triple
-verificación es la barrera de calidad mínima.
+Si algo falla, se arregla **antes** de cerrar la tarea. Desde 10-U4 existen
+tests automatizados (Vitest) y `bun run verify` (lint + typecheck + test +
+build) es la barrera de calidad mínima.
 
 ## 4. Arquitectura clave (leer antes de tocar)
 
@@ -173,6 +174,68 @@ verificación es la barrera de calidad mínima.
 - **Logging saneado:** solo tipo, digest y stack. **Nunca** emails,
   descripciones, nombres de cuenta, API keys, headers ni snapshots de undo.
 
+### Drill-down y filtros en URL (10-U4)
+- **URL = fuente de verdad:** los filtros de la vista de transacciones viven en
+  la query: `/?view=transactions&category=<id>&account=<id>&type=<income|expense|transfer|adjustment>&from=YYYY-MM-DD&to=YYYY-MM-DD&q=<texto>`.
+  La vista los lee de la URL y los escribe en la URL; no hay estado de filtros
+  en el store (el único buffer local es el input de búsqueda, que se
+  re-sincroniza con la URL).
+- **Todo cambio de filtro pasa por
+  `useViewNavigation().navigate('transactions', { filters })`** (único camino de
+  navegación; **prohibido** llamar `setActiveView` desde un componente). Los
+  cambios de filtro usan `replace` (no ensucian el historial); el drill-down
+  desde otra vista usa `push` → el back/forward del navegador funciona.
+- **Params inválidos se descartan, no rompen:** el parseo es total (mismo
+  patrón que `parseViewKey`): `type` fuera de enum → se ignora; fecha que no
+  existe → se ignora; `from > to` → se normaliza invirtiendo; id con formato
+  inválido → se ignora. Sin toast, sin error visible, sin pantalla en blanco.
+- **Filtro colgante:** si `category`/`account` apunta a algo que ya no existe →
+  aviso en i18n (`role="status"`) + acción "Quitar filtros"; ese filtro se
+  trata como **inactivo** (no se aplica) para no dejar una pantalla vacía sin
+  explicación.
+- **Toda acción de drill-down es un `<button type="button">` real** — nunca
+  `<div onClick>`, nunca `role="button"`, y **nunca un botón dentro de otro
+  botón**: en filas que ya tienen acciones (presupuestos, cuentas) el drill-down
+  es el botón del *nombre* (categoría/cuenta); en filas sin otras acciones
+  (leyenda del donut) la fila entera puede ser el botón. Target ≥ 44 px y
+  `focus-visible` (global).
+- **`aria-label` i18n con el dato real:** toda acción de drill-down expone
+  categoría/cuenta + importe + periodo en su nombre accesible (plantilla en
+  `src/lib/finzen/i18n.ts`, es + en).
+- **Gráficos:** cada contenedor de `recharts` se expone como `role="img"` +
+  `aria-label` i18n (resumen honesto). Los sectores/barras **no** son
+  interactivos (el SVG no es operable por teclado) y **nunca** son la única vía
+  a una acción: el drill-down vive en la lista/leyenda con botones reales.
+- **Honestidad de datos:** los agregados compuestos (patrimonio neto, ratio de
+  ahorro, ahorro neto, total del presupuesto) **no** son clicables; no se crea
+  una acción sin resultado real.
+- **Presupuestos:** el destino usa el mismo periodo que el cálculo del gasto
+  mostrado; si el número mostrado y el destino pueden divergir, se corrige el
+  cálculo, no la etiqueta.
+
+### Tests automatizados (Vitest) (10-U4)
+- **Runner:** Vitest sobre **Node** (no `bun test`, no Vitest sobre Bun).
+  `vitest.config.mts` separado (Next nunca lo carga; la extensión `.mts` evita
+  el warning de Vite 8 sobre config ESM cargada como CommonJS),
+  `environment: 'node'`,
+  `globals: false` (imports explícitos de `vitest`), alias `@/` → `src/`.
+- **Dónde viven:** `src/**/__tests__/*.test.ts` (+ `tests/setup.ts` y
+  `tests/global-setup.ts`).
+- **Comando:** `bun run test` (rápido) y `bun run verify` = **lint + typecheck +
+  test + build** (barrera mínima obligatoria).
+- **BD:** los tests **nunca** apuntan a `db/custom.db` ni a Turso. Para la BD
+  real se usa un **SQLite temporal** (DDL con `prisma migrate diff --from-empty
+  --to-schema-datamodel prisma/schema.prisma --script`) que se borra al
+  terminar; para el resto, `vi.mock('@/lib/db')` con un fake en memoria que
+  registre las escrituras (permite afirmar "0 escrituras" en los caminos de
+  error del undo).
+- **Reglas:** sin `as any`; sin secretos reales (`NEXTAUTH_SECRET` de pruebas
+  en `tests/setup.ts`); los tests de `undo` deben afirmar **0 escrituras** en
+  los caminos de error; sin `jsdom` mientras no haya tests de componentes.
+- **`tsconfig.json` no se toca** ⇒ los tests entran en `tsc --noEmit` y en el
+  type-check de `next build` (ventaja: los tests no pueden mentir sobre los
+  tipos).
+
 ### React Compiler (importante)
 El ESLint usa React Compiler. Los `useMemo` cuyas dependencias derivan de
 `new Date()` (impuro) no se pueden preservar y generan el error
@@ -231,6 +294,9 @@ src/app/error.tsx                   # boundary de ruta (Next)
 src/app/global-error.tsx            # boundary global (autocontenido)
 src/lib/finzen/             # dominio: currency, finance, i18n, ocr, date-utils
 src/lib/finzen/views.ts     # contrato de vistas (ViewKey, VIEW_KEYS, parseViewKey)
+src/lib/finzen/transaction-filters.ts  # filtros de transacciones en URL (parse/serialize puros)
+src/lib/finzen/view-href.ts            # constructor de URLs de vista (?view= + filtros)
+src/hooks/use-transaction-filters.ts    # lee/escribe los filtros de la URL
 src/lib/finzen/platform.ts  # detección de plataforma (badge ⌘K / Ctrl+K)
 src/lib/auth/               # authOptions, api-key, verificación v1
 src/store/finzen-store.ts   # estado global (Zustand) — ver §4
@@ -241,6 +307,8 @@ src/components/finzen/shortcuts-dialog.tsx # ayuda de atajos
 src/types/next-auth.d.ts    # augmentación de tipos de NextAuth
 scripts/                    # utilidades de BD/keys (ESM, se corren con bun)
 db/                         # SQLite local de dev + schema.sql
+vitest.config.mts           # config de tests (Node, alias @/, sin jsdom)
+tests/                      # setup/global-setup de Vitest (BD temporal para P3)
 ```
 
 ### Añadir una vista nueva
@@ -270,4 +338,6 @@ db/                         # SQLite local de dev + schema.sql
 - ❌ Placeholders fake en KPIs/sesión ("Mi Perfil —", "+0%").
 - ❌ `as any` para esquivar tipos — arreglar la raíz (ej: augmentación).
 - ❌ Tocar `src/components/ui/*` salvo integración — son primitivas estándar.
-- ❌ Cerrar una tarea sin que pasen `lint` + `typecheck` + `build`.
+- ❌ Cerrar una tarea sin que pasen `lint` + `typecheck` + `test` + `build`.
+- ❌ Tests que apunten a la BD de dev (`db/custom.db`) o a Turso — la BD de test
+  es un SQLite temporal que se borra al terminar.

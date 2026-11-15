@@ -33,7 +33,7 @@
 - **Salida:** `{ netWorth: number, assets: number, liabilities: number }`
 - **Notas de implementación:** las funciones puras reciben `accounts[]` + `baseCurrency` (cada balance se convierte con `convertAmount`); el scoping por `userId` vive hoy inline en legacy `GET /api/agent/summary` (que retorna `netWorth, totalAssets, totalLiabilities`). El contrato de esta skill (`assets`/`liabilities`) prevalece sobre el naming del legacy al extraer el servicio (Fase 1). Cuentas `income`/`expense` = virtuales → se ignoran.
 - **Estado MCP:** 🔧 extraer (funciones puras ✅; falta el servicio por `userId`).
-- **Verificación:** test unitario de las funciones puras (Vitest, Fase 0) · legacy route en producción.
+- **Verificación:** test unitario Vitest de las funciones puras (`src/lib/finzen/__tests__/finance.test.ts`, 10-U4) · legacy route en producción.
 
 ### `get_financial_summary`
 - **Descripción:** Retorna totales de ingresos, gastos, net y desglose por categorías para un mes.
@@ -50,7 +50,7 @@
 - **Entrada:** `{ limit?: number (def 50, máx 200), month?: "YYYY-MM" }` — el legacy añade `type`, `categoryId`, `fromDate`, `toDate`, `search`.
 - **Salida:** `{ success, count, expenses|incomes: [{ id, amount, currency, category, description, date, account }] }`
 - **Estado MCP:** 🔧 extraer (unificar v1 + legacy en un solo servicio).
-- **Verificación:** E2E curl fases 7.5–7.9 ✓.
+- **Verificación:** E2E curl fases 7.5–7.9 ✓ · el filtrado equivalente en la UI (`src/lib/finzen/transaction-filters.ts`) está cubierto por `src/lib/finzen/__tests__/transaction-filters.test.ts` (10-U4).
 
 ### `budget_progress` y `alerts`
 - **Descripción:** Progreso por categoría contra el presupuesto y alertas derivadas.
@@ -163,7 +163,7 @@ cuando se expongan como tools.
 - **Errores:** ninguno — es una función pura y total (nunca crashea).
 - **Notas:** `POST /api/restore` preserva el `color` tal cual (fidelidad de respaldo) → acepta HEX y claves sin transformar; el runtime los normaliza al pintar.
 - **Estado MCP:** ✅ lista (función pura, sin dependencias de BD).
-- **Verificación:** test unitario del mapeo (vecino OKLab) + E2E: `POST /api/categories` con `color: "#059669"` persiste `cat-1`; con `color: "basura"` persiste `cat-12`.
+- **Verificación:** test unitario Vitest del mapeo (vecino OKLab) en `src/lib/finzen/__tests__/category-color.test.ts` (10-U4) + E2E: `POST /api/categories` con `color: "#059669"` persiste `cat-1`; con `color: "basura"` persiste `cat-12`.
 
 
 ### `resolve_account`
@@ -189,7 +189,7 @@ cuando se expongan como tools.
 - **Entrada:** `{ amount: number, from: CurrencyCode, to: CurrencyCode }` (+ `locale` para `formatMoney`).
 - **Salida:** `number` (convertido) · `string` (formateado).
 - **Estado MCP:** 🌐 requiere fuente externa (tasas estáticas hoy — deuda `MEMORY.md` §5.2).
-- **Verificación:** test unitario (función pura, Fase 0).
+- **Verificación:** test unitario Vitest (función pura) en `src/lib/finzen/__tests__/currency.test.ts` (10-U4).
 
 ## 4. Ingesta de Datos
 
@@ -215,14 +215,16 @@ cuando se expongan como tools.
 | Skill | Receta |
 |---|---|
 | `add_view` | `AGENTS.md` §6: crear `src/components/finzen/<vista>-view.tsx` → **añadir la clave a `VIEW_KEYS` (`src/lib/finzen/views.ts`)** → registrar el componente en `VIEWS` (`app-shell.tsx`) y el icono/etiqueta en `VIEW_REGISTRY` (`view-registry.tsx`) → `MOBILE_PRIMARY`/`MOBILE_SECONDARY`/`MOBILE_MORE` → claves en `i18n.ts` (es+en). Los mapas son `Record<ViewKey, …>` → `tsc` **falla** si falta una vista (anti-drift). |
-| `view_deep_link` | `src/lib/finzen/views.ts` (`VIEW_KEYS`, `parseViewKey`) + `src/components/finzen/view-route-sync.tsx` (`useSearchParams` **dentro de un `<Suspense>`**) + `src/hooks/use-view-navigation.ts` (`navigate()`): toda vista es direccionable por `/?view=<key>`; el back/forward funciona porque cada cambio de vista hace `router.push`. Verificación: `bun run verify` + abrir `/?view=<key>` en el navegador. |
+| `view_deep_link` | `src/lib/finzen/views.ts` (`VIEW_KEYS`, `parseViewKey`) + `src/components/finzen/view-route-sync.tsx` (`useSearchParams` **dentro de un `<Suspense>`**) + `src/hooks/use-view-navigation.ts` (`navigate()`): toda vista es direccionable por `/?view=<key>`; el back/forward funciona porque cada cambio de vista hace `router.push`; la canonicalización de `view` **preserva el resto de query params** (filtros). Verificación: `bun run verify` + abrir `/?view=<key>` en el navegador. |
 | `keyboard_shortcuts` | `src/hooks/use-global-shortcuts.ts` + `src/components/finzen/command-palette.tsx` + `src/components/finzen/shortcuts-dialog.tsx`: atajos globales `⌘K`/`Ctrl+K` (paleta), `?` (ayuda), `Alt+1..7` (vista N), `Alt+N` (nueva transacción). Reglas: nunca disparar atajos con el foco en un campo editable ni con un modal abierto; la tabla de atajos se define en **una** constante compartida por el handler y el diálogo de ayuda. Verificación: `bun run verify` + recorrido manual por teclado. |
 | `destructive_undo` | `src/lib/services/undo-service.ts` + `src/app/api/undo/route.ts` + `src/hooks/use-undo.ts`: snapshot en memoria durante 10 s; restore con ID original; **recibo HMAC firmado en el DELETE y validado antes de escribir** (prueba de propiedad: el snapshot viene del cliente); precondición `updatedAt` para lotes importados; no modifica `/api/v1/*`. |
 | `error_boundary` | `src/app/error.tsx` + `src/app/global-error.tsx` + `src/components/finzen/view-error-boundary.tsx`: fallback i18n, retry + dashboard, logging saneado; los errores de acciones siguen mostrándose como toast. |
 | `add_endpoint_interno` | `getServerSession(authOptions)` + early return 401 sin `session.user.id` |
 | `add_endpoint_v1` | `authenticateV1Request` (`src/lib/auth/v1-api.ts`) + errores `{ success: false, error: snake_case }` |
 | `db_schema_change` | Editar `schema.prisma` → `bun run db:generate` → `bun run db:push` → sincronizar interfaces del store (frontera de tipos) |
-| `verify_quality` | `bun run lint && bun run typecheck && bun run build` — barrera mínima obligatoria |
+| `verify_quality` | `bun run verify` — **lint + typecheck + test + build** (barrera mínima obligatoria); `bun run test` para iterar rápido |
+| `transaction_drilldown` | `src/lib/finzen/transaction-filters.ts` (parse/serialize puros de los filtros) + `src/lib/finzen/view-href.ts` (`buildViewHref`) + `src/hooks/use-transaction-filters.ts` + `src/hooks/use-view-navigation.ts` (`navigate(view, { filters })`): todo drill-down va a `?view=transactions` con filtros en la URL (`category`, `account`, `type`, `from`, `to`, `q`); la **URL es la fuente de verdad**; los parámetros inválidos se descartan (patrón `parseViewKey`); nunca llamar `setActiveView` desde un componente; la affordance es siempre un `<button type="button">` con `aria-label` i18n. Verificación: `bun run verify` + abrir `/?view=transactions&category=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD`. |
+| `unit_test` | `vitest.config.mts` (Node, `environment: 'node'`, alias `@/`, `globals: false`) + tests en `src/**/__tests__/*.test.ts` + `tests/setup.ts`: importar `describe`/`it`/`expect` de `vitest` explícitamente; `vi.mock('@/lib/db')` para no tocar la BD de dev ni Turso (la BD real de test es un SQLite temporal, borrado al final); `NEXTAUTH_SECRET` de pruebas en `tests/setup.ts`; sin `as any`; sin `jsdom` mientras no haya tests de componentes. Comando: `bun run test` (incluido en `bun run verify`). |
 
 ## Regla de alta de skills
 

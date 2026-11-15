@@ -51,3 +51,34 @@ export function localizedPair(
   const fallback = locale === 'es' ? en : es;
   return primary || fallback || '';
 }
+
+/**
+ * Etiqueta legible de un periodo de filtros (convención 10-U4).
+ *
+ * Se usa en los `aria-label` del drill-down: el nombre accesible debe llevar
+ * el dato real (categoría/cuenta + importe + periodo). Un rango dentro del
+ * mismo mes se muestra como un único mes ("noviembre de 2026"); si abarca
+ * varios, se muestra "mes A – mes B".
+ */
+export function filterPeriodLabel(
+  from: string | null,
+  to: string | null,
+  locale: Locale
+): string {
+  if (!from && !to) return '';
+
+  const format = (value: string): string =>
+    new Intl.DateTimeFormat(intlLocale(locale), {
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(`${value}T12:00:00`));
+
+  if (from && to) {
+    const fromLabel = format(from);
+    const toLabel = format(to);
+    return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
+  }
+
+  const only = from ?? to;
+  return only ? format(only) : '';
+}

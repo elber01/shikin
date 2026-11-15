@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { STAT_SCALE, type StatScale } from '@/components/finzen/ui/stat-scale';
@@ -12,6 +13,12 @@ export interface StatCardProps {
   tone?: StatTone;
   /** Texto auxiliar bajo el monto (p. ej. un porcentaje). */
   hint?: string;
+  /**
+   * Acción que reemplaza la etiqueta (convención 10-U4: el drill-down es el
+   * botón del *nombre*). Debe ser un `<button type="button">` real con su
+   * propio `aria-label` — nunca un `<div onClick>`.
+   */
+  labelAction?: ReactNode;
   /** Escala responsive — define a la vez la fuente del monto y (en StatGrid) el breakpoint. */
   scale?: StatScale;
   className?: string;
@@ -38,6 +45,7 @@ export function StatCard({
   value,
   tone = 'default',
   hint,
+  labelAction,
   scale = 'md',
   className,
   labelClassName,
@@ -45,7 +53,9 @@ export function StatCard({
 }: StatCardProps) {
   return (
     <Card className={cn('p-4', className)}>
-      <div className={cn('text-xs text-muted-foreground', labelClassName)}>{label}</div>
+      <div className={cn('text-xs text-muted-foreground', labelClassName)}>
+        {labelAction ?? label}
+      </div>
       <div
         className={cn(
           'font-bold tabular-nums break-words',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { TrendingUp, TrendingDown } from 'lucide-react';
@@ -20,6 +20,17 @@ interface KpiCardProps {
   color?: 'income' | 'expense' | 'warning' | 'primary';
   suffix?: string;
   variant?: 'default' | 'gradient';
+  /**
+   * Acción que reemplaza la etiqueta (convención 10-U4: el drill-down es el
+   * botón del *nombre*). Debe ser un `<button type="button">` real con su
+   * propio `aria-label` — nunca un `<div onClick>`.
+   */
+  labelAction?: ReactNode;
+  /**
+   * Nombre accesible del sparkline (convención 10-U4: todo contenedor de
+   * `recharts` se expone como `role="img"` + `aria-label` i18n).
+   */
+  sparklineLabel?: string;
 }
 
 export function KpiCard({
@@ -34,6 +45,8 @@ export function KpiCard({
   color = 'primary',
   suffix,
   variant = 'default',
+  labelAction,
+  sparklineLabel,
 }: KpiCardProps) {
   const sparkId = `spark-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const isGradient = variant === 'gradient';
@@ -67,14 +80,16 @@ export function KpiCard({
       )}
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between">
-          <span
-            className={cn(
-              'text-xs font-medium uppercase tracking-wide',
-              isGradient ? 'text-primary-foreground/70' : 'text-muted-foreground'
-            )}
-          >
-            {label}
-          </span>
+          {labelAction ?? (
+            <span
+              className={cn(
+                'text-xs font-medium uppercase tracking-wide',
+                isGradient ? 'text-primary-foreground/70' : 'text-muted-foreground'
+              )}
+            >
+              {label}
+            </span>
+          )}
           {delta && deltaDirection !== 'neutral' && (
             <span
               className={cn(
@@ -116,7 +131,11 @@ export function KpiCard({
         )}
 
         {sparkData && sparkData.length > 1 && (
-          <div className={cn('w-full', size === 'hero' ? 'h-14 mt-3' : 'h-8 mt-2')}>
+          <div
+            className={cn('w-full', size === 'hero' ? 'h-14 mt-3' : 'h-8 mt-2')}
+            role="img"
+            aria-label={sparklineLabel}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData.map((v, i) => ({ i, v }))}>
                 <defs>
