@@ -168,3 +168,18 @@ model ApiKey {
 
   @@index([userId])
 }
+
+/// Rate limit compartido (Fase 0) — 1 fila por principal.
+/// El `id` es el *scope* (p.ej. "key:<sha256>"); NUNCA la key cruda.
+/// Tiempos en epoch-ms. `BigInt` y NO `Int`: epoch-ms NO cabe en Int32 y el
+/// conector SQLite de Prisma rechaza el valor en columnas `Int`
+/// ("Conversion failed: Value ... does not fit in an INT column").
+/// En SQLite/Turso queda como INTEGER (afinidad) y se compara sin ambigüedad.
+model RateLimitBucket {
+  id            String @id          // scope, p.ej. "key:<sha256 de la key>"
+  hits          Int    @default(0)  // hits de la ventana vigente
+  windowStartMs BigInt
+  expiresAtMs   BigInt
+  updatedAtMs   BigInt
+  @@index([expiresAtMs])
+}

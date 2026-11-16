@@ -1,24 +1,34 @@
 import { NextResponse } from 'next/server';
-import { validateApiKey, hasPermission } from '@/lib/auth/api-key';
+import { authenticateV1Request, hasPermission } from '@/lib/auth/v1-api';
+import { LEGACY_SUCCESSOR, withLegacyDeprecation } from '@/lib/http/deprecation';
 import { db } from '@/lib/db';
 
 /**
  * GET /api/agent/categories
  * Returns all categories for the authenticated API key user.
  * Useful for AI agents to know what categories exist before creating transactions.
- * 
- * Headers: Authorization: Bearer fz_xxxxx
+ *
+ * DEPRECATED (Fase 0): no existe sucesor v1 todavía (pendiente de Fase 1).
+ * Auth unificada (`authenticateV1Request`), rate limit compartido con v1 y
+ * errores normalizados al shape v1. El shape de ÉXITO no cambia (solo se
+ * añade `success: true`).
+ *
+ * Headers: X-API-Key: fz_xxxxx  (o Authorization: Bearer fz_xxxxx)
  */
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  const user = await validateApiKey(authHeader);
+  const auth = await authenticateV1Request(req);
+  if (!auth.ok) return withLegacyDeprecation(auth.response!, LEGACY_SUCCESSOR.categories);
+  const user = auth.user!;
 
-  if (!user) {
-    return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
-  }
   if (!hasPermission(user, 'read')) {
-    return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    return withLegacyDeprecation(
+      NextResponse.json(
+        { success: false, error: 'forbidden', message: 'This API key does not have read permission' },
+        { status: 403 }
+      ),
+      LEGACY_SUCCESSOR.categories
+    );
   }
 
   const categories = await db.category.findMany({
@@ -26,17 +36,21 @@ export async function GET(req: Request) {
     orderBy: { sortOrder: 'asc' },
   });
 
-  return NextResponse.json({
-    count: categories.length,
-    categories: categories.map(c => ({
-      id: c.id,
-      name: c.name,
-      nameEs: c.nameEs,
-      nameEn: c.nameEn,
-      icon: c.icon,
-      color: c.color,
-      direction: c.direction, // income | expense | transfer
-      isSystem: c.isSystem,
-    })),
-  });
+  return withLegacyDeprecation(
+    NextResponse.json({
+      success: true,
+      count: categories.length,
+      categories: categories.map(c => ({
+        id: c.id,
+        name: c.name,
+        nameEs: c.nameEs,
+        nameEn: c.nameEn,
+        icon: c.icon,
+        color: c.color,
+        direction: c.direction, // income | expense | transfer
+        isSystem: c.isSystem,
+      })),
+    }),
+    LEGACY_SUCCESSOR.categories
+  );
 }

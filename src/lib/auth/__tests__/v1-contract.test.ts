@@ -20,23 +20,44 @@ import { join, resolve } from 'node:path';
 /** Registro de llamadas a la BD (fake en memoria). */
 const dbCalls = vi.hoisted<string[]>(() => []);
 
-vi.mock('@/lib/db', () => ({
-  db: {
-    apiKey: {
-      findUnique: async () => {
-        dbCalls.push('apiKey.findUnique');
-        return null;
-      },
-      update: async () => {
-        dbCalls.push('apiKey.update');
-        return null;
+/** Key de prueba (NUNCA una key real). */
+const VALID_KEY = 'fz_test_key_for_contract';
+
+vi.mock('@/lib/db', async () => {
+  const { createHash } = await import('node:crypto');
+  const validKeyHash = createHash('sha256').update('fz_test_key_for_contract').digest('hex');
+
+  return {
+    db: {
+      apiKey: {
+        findUnique: async (args: { where: { keyHash: string } }) => {
+          dbCalls.push('apiKey.findUnique');
+          if (args?.where?.keyHash === validKeyHash) {
+            return {
+              id: 'apikey-contract-1',
+              isActive: true,
+              expiresAt: null,
+              permissions: 'read,write',
+              user: {
+                id: 'user-contract-1',
+                email: 'v1-contract@example.invalid',
+                name: 'V1 Contract',
+              },
+            };
+          }
+          return null;
+        },
+        update: async () => {
+          dbCalls.push('apiKey.update');
+          return null;
+        },
       },
     },
-  },
-  ensureDb: async () => {
-    dbCalls.push('ensureDb');
-  },
-}));
+    ensureDb: async () => {
+      dbCalls.push('ensureDb');
+    },
+  };
+});
 
 const { authenticateV1Request } = await import('@/lib/auth/v1-api');
 
@@ -195,6 +216,111 @@ describe('API v1 — contrato de errores', () => {
   });
 });
 
+describe('API v1 — rate limit compartido', () => {
+  /** Request con la key de prueba válida (fake de la BD). */
+  function requestWithKey(path = '/api/v1/accounts'): Request {
+    return new Request(`http://localhost${path}`, { headers: { 'x-api-key': VALID_KEY } });
+  }
+
+  /** Store que siempre devuelve el cubeto por encima del límite. */
+  function exhaustedStore() {
+    return {
+      hit: async () => ({
+        hits: 61,
+        windowStartMs: Date.now(),
+        expiresAtMs: Date.now() + 60_000,
+      }),
+    };
+  }
+
+  /** Store que siempre falla (tabla ausente / Turso caído). */
+  function failingStore() {
+    return {
+      hit: async () => {
+        throw new Error('no such table: RateLimitBucket');
+      },
+    };
+  }
+
+  it('responde 429 rate_limited con el body y los headers obligatorios', async () => {
+    const result = await authenticateV1Request(requestWithKey(), { store: exhaustedStore() });
+
+    expect(result.ok).toBe(false);
+    expect(result.response).toBeDefined();
+    expect(result.response!.status).toBe(429);
+
+    const body = (await result.response!.json()) as ErrorBody;
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('rate_limited');
+    expect(body.error).toMatch(SNAKE_CASE);
+    expect(body.message).toMatch(/^Too many requests\. Retry in \d+s\.$/);
+
+    // Headers obligatorios (los 3 previos + los 2 nuevos).
+    const retryAfter = result.response!.headers.get('retry-after');
+    expect(retryAfter).not.toBeNull();
+    expect(Number(retryAfter)).toBeGreaterThanOrEqual(1);
+    expect(result.response!.headers.get('x-ratelimit-limit')).toBe('60');
+    expect(result.response!.headers.get('x-ratelimit-window')).toBe('60s');
+    expect(result.response!.headers.get('x-ratelimit-remaining')).toBe('0');
+    const reset = result.response!.headers.get('x-ratelimit-reset');
+    expect(reset).not.toBeNull();
+    expect(Number(reset)).toBeGreaterThan(0);
+    // El mensaje del body concuerda con el header.
+    expect(body.message).toBe(`Too many requests. Retry in ${retryAfter}s.`);
+  });
+
+  it('el 429 NO depende del store real: la decisión viene del cubeto inyectado', async () => {
+    const result = await authenticateV1Request(requestWithKey('/api/v1/summary'), {
+      store: exhaustedStore(),
+    });
+    expect(result.response!.status).toBe(429);
+    expect(result.rateLimit?.ok).toBe(false);
+    expect(result.rateLimit?.remaining).toBe(0);
+    expect(result.rateLimit?.limit).toBe(60);
+  });
+
+  it('modo strict: si el store compartido falla, responde 503 rate_limit_unavailable', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const previous = process.env.FINZEN_RATE_LIMIT_FAIL_MODE;
+    process.env.FINZEN_RATE_LIMIT_FAIL_MODE = 'strict';
+
+    try {
+      const result = await authenticateV1Request(requestWithKey(), { store: failingStore() });
+
+      expect(result.ok).toBe(false);
+      expect(result.response!.status).toBe(503);
+
+      const body = (await result.response!.json()) as ErrorBody;
+      expect(body.success).toBe(false);
+      expect(body.error).toBe('rate_limit_unavailable');
+      expect(body.error).toMatch(SNAKE_CASE);
+      expect(body.message).toBe('Rate limiter temporarily unavailable');
+    } finally {
+      if (previous === undefined) delete process.env.FINZEN_RATE_LIMIT_FAIL_MODE;
+      else process.env.FINZEN_RATE_LIMIT_FAIL_MODE = previous;
+      spy.mockRestore();
+    }
+  });
+
+  it('modo fallback (por defecto): si el store compartido falla, NO hay 5xx', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const previous = process.env.FINZEN_RATE_LIMIT_FAIL_MODE;
+    delete process.env.FINZEN_RATE_LIMIT_FAIL_MODE;
+
+    try {
+      const result = await authenticateV1Request(requestWithKey(), { store: failingStore() });
+
+      expect(result.ok).toBe(true);
+      expect(result.response).toBeUndefined();
+      expect(result.rateLimit?.degraded).toBe(true);
+      expect(result.rateLimit?.ok).toBe(true);
+    } finally {
+      if (previous !== undefined) process.env.FINZEN_RATE_LIMIT_FAIL_MODE = previous;
+      spy.mockRestore();
+    }
+  });
+});
+
 describe('API v1 — escaneo estático de las rutas', () => {
   const routeFiles = collectRouteFiles(V1_ROOT);
   const serviceFiles = collectServiceFiles(SERVICES_ROOT);
@@ -313,5 +439,117 @@ describe('API v1 — escaneo estático de las rutas', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rutas LEGACY `/api/agent/*` (deprecadas en Fase 0)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LEGACY_ROOT = resolve(process.cwd(), 'src', 'app', 'api', 'agent');
+
+/**
+ * Auditoría de una ruta legacy: devuelve la lista de infracciones.
+ * Se usa con las rutas reales (debe salir vacía) y con el fixture del
+ * CÓDIGO VIEJO (control negativo: debe listar infracciones).
+ */
+function auditLegacyRoute(src: string): string[] {
+  const offenders: string[] = [];
+
+  // 1. Auth unificada: `authenticateV1Request` (nunca `validateApiKey`).
+  if (!src.includes('authenticateV1Request')) offenders.push('sin authenticateV1Request');
+  if (src.includes('validateApiKey(')) offenders.push('usa validateApiKey( (auth no unificada)');
+
+  // 2. Headers de deprecación en TODAS las respuestas.
+  if (!src.includes('withLegacyDeprecation')) offenders.push('sin withLegacyDeprecation');
+  if (/return\s+NextResponse\.json\(/.test(src)) {
+    offenders.push('devuelve NextResponse.json sin envolver en withLegacyDeprecation');
+  }
+
+  // 3. Errores con el shape v1: success:false + error snake_case + message.
+  for (const arg of extractJsonArgs(src)) {
+    if (!/error\s*:/.test(arg)) continue;
+    if (!/success\s*:\s*false/.test(arg)) offenders.push('respuesta de error sin success:false');
+    if (!/message\s*:/.test(arg)) offenders.push('respuesta de error sin message');
+  }
+  for (const value of extractKeyLiterals(src, 'error')) {
+    if (!SNAKE_CASE.test(value)) offenders.push(`error no snake_case: '${value}'`);
+  }
+
+  return offenders;
+}
+
+describe('API legacy — contrato de deprecación y normalización', () => {
+  const legacyFiles = collectRouteFiles(LEGACY_ROOT);
+
+  it('encuentra las 4 rutas legacy deprecadas', () => {
+    const rel = legacyFiles.map((f) => f.replace(LEGACY_ROOT, '').replace(/\\/g, '/')).sort();
+    expect(rel).toEqual([
+      '/accounts/route.ts',
+      '/categories/route.ts',
+      '/summary/route.ts',
+      '/transactions/route.ts',
+    ]);
+  });
+
+  it('toda ruta legacy usa la auth unificada y los headers de deprecación', () => {
+    const offenders: string[] = [];
+    for (const file of legacyFiles) {
+      const src = stripComments(readFileSync(file, 'utf8'));
+      const rel = file.replace(LEGACY_ROOT, '').replace(/\\/g, '/');
+      for (const issue of auditLegacyRoute(src)) {
+        offenders.push(`${rel} -> ${issue}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('ninguna ruta legacy contiene `validateApiKey(`', () => {
+    for (const file of legacyFiles) {
+      const src = readFileSync(file, 'utf8');
+      expect(src, file).not.toContain('validateApiKey(');
+    }
+  });
+
+  it('CONTROL NEGATIVO: el escaneo detecta el código VIEJO (sin normalizar)', () => {
+    const oldRoute = `
+      import { validateApiKey, hasPermission } from '@/lib/auth/api-key';
+      export async function GET(req: Request) {
+        const authHeader = req.headers.get('authorization');
+        const user = await validateApiKey(authHeader);
+        if (!user) {
+          return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
+        }
+        if (!hasPermission(user, 'read')) {
+          return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+        }
+      }
+    `;
+
+    const offenders = auditLegacyRoute(oldRoute);
+
+    expect(offenders.length).toBeGreaterThan(0);
+    expect(offenders).toContain('sin authenticateV1Request');
+    expect(offenders).toContain('usa validateApiKey( (auth no unificada)');
+    expect(offenders).toContain('sin withLegacyDeprecation');
+    expect(offenders).toContain('devuelve NextResponse.json sin envolver en withLegacyDeprecation');
+    expect(offenders).toContain('respuesta de error sin success:false');
+    expect(offenders).toContain('respuesta de error sin message');
+    expect(offenders).toContain("error no snake_case: 'Invalid or missing API key'");
+  });
+
+  it('las rutas legacy comparten el cubeto con v1 (misma auth → mismo scope)', () => {
+    // El cubeto se calcula DENTRO de `authenticateV1Request` (`apiKeyScope`),
+    // así que v1 y legacy usan el MISMO scope por construcción.
+    const v1Source = readFileSync(resolve(process.cwd(), 'src', 'lib', 'auth', 'v1-api.ts'), 'utf8');
+    expect(v1Source).toContain('apiKeyScope(keyHash)');
+
+    for (const file of legacyFiles) {
+      const src = readFileSync(file, 'utf8');
+      expect(src, file).toContain('authenticateV1Request(req)');
+      // Ninguna ruta legacy calcula su propio cubeto (ni su propio Map).
+      expect(src, file).not.toContain('new Map');
+      expect(src, file).not.toContain('apiKeyScope');
+    }
   });
 });

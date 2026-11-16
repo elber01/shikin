@@ -82,6 +82,17 @@ const globalForPrisma = globalThis as unknown as {
  *
  * Idempotent via global flag.
  */
+/**
+ * Descripción segura de la URL de BD para los logs: elimina el query string
+ * (p. ej. `?authToken=…` de Turso) y trunca. Los secretos de conexión
+ * (authToken) NUNCA se loguean.
+ */
+function safeDbUrlLabel(rawUrl: string): string {
+  if (!rawUrl) return '(unset)'
+  const withoutQuery = rawUrl.split('?')[0]
+  return withoutQuery.length > 60 ? `${withoutQuery.substring(0, 60)}...` : withoutQuery
+}
+
 async function ensureSchemaIfVercel(prisma: PrismaClient): Promise<void> {
   if (globalForPrisma.__finzenDbInitialized) return
 
@@ -89,7 +100,7 @@ async function ensureSchemaIfVercel(prisma: PrismaClient): Promise<void> {
     // Re-evaluate DATABASE_URL at runtime (Vercel env vars are injected here)
     const runtimeDbUrl = process.env.DATABASE_URL || ''
     const isLibsql = runtimeDbUrl.startsWith('libsql:')
-    console.log(`[finzen] ensureSchema starting. DB URL: ${runtimeDbUrl.substring(0, 60)}${runtimeDbUrl.length > 60 ? '...' : ''}${isLibsql ? ' (libsql/Turso)' : ' (file SQLite)'}`)
+    console.log(`[finzen] ensureSchema starting. DB URL: ${safeDbUrlLabel(runtimeDbUrl)}${isLibsql ? ' (libsql/Turso)' : ' (file SQLite)'}`)
     console.log(`[finzen] process.cwd(): ${process.cwd()}`)
 
     // ── Turso path: external persistent DB, no need to copy seed files ──
@@ -230,8 +241,10 @@ async function ensureSchemaIfVercel(prisma: PrismaClient): Promise<void> {
     // ── Step 3: ensure Edwin has at least one API key ─────────────
     // If the seed DB was copied, Edwin already has "Nueva grazzia" (fz_9b35a...).
     // We still generate a fresh "production demo" key so the user has a
-    // known full key for curl testing — LOG it to the runtime logs so we
-    // can retrieve it.
+    // known full key for curl testing.
+    // SEGURIDAD: la key CRUDA NUNCA se loguea (SDD.md §2 — "la clave cruda
+    // nunca se loguea"): solo se registra el `keyPrefix` (persistido) y la
+    // vía de recuperación es el gestor de API keys in-app.
     const existingKeys = await prisma.apiKey.findMany({
       where: { userId },
       select: { id: true, name: true, keyPrefix: true, isActive: true },
@@ -246,17 +259,20 @@ async function ensureSchemaIfVercel(prisma: PrismaClient): Promise<void> {
       const { createHash, randomBytes } = await import('crypto')
       const rawKey = 'fz_prod_demo_' + randomBytes(8).toString('hex')
       const keyHash = createHash('sha256').update(rawKey).digest('hex')
+      const keyPrefix = rawKey.substring(0, 12) + '...'
       await prisma.apiKey.create({
         data: {
           userId,
           name: 'Production demo key',
           keyHash,
-          keyPrefix: rawKey.substring(0, 12) + '...',
+          keyPrefix,
           permissions: 'read,write',
         },
       })
-      console.log(`[finzen] ✅ Created fresh production demo API key: ${rawKey}`)
-      console.log(`[finzen]    (Use with: curl -H "X-API-Key: ${rawKey}" https://finzen-elber01s-projects.vercel.app/api/v1/expenses)`)
+      console.log(`[finzen] ✅ Created fresh production demo API key (prefix: ${keyPrefix}).`)
+      console.log(`[finzen]    The raw key is NEVER logged and is shown only once, at creation time.`)
+      console.log(`[finzen]    If it was lost, create a new key from the in-app API Key manager and revoke this one.`)
+      console.log(`[finzen]    (Use with: curl -H "X-API-Key: <your-api-key>" https://finzen-elber01s-projects.vercel.app/api/v1/expenses)`)
     } else {
       console.log('[finzen] Production demo key already exists for Edwin')
     }
@@ -275,7 +291,7 @@ function createPrismaClient(): PrismaClient {
   // they may not be available at module-eval time during the build phase.
   const runtimeDbUrl = process.env.DATABASE_URL || ''
   const isLibsql = runtimeDbUrl.startsWith('libsql:')
-  console.log(`[finzen] Creating PrismaClient. URL: ${runtimeDbUrl.substring(0, 50)}${runtimeDbUrl.length > 50 ? '...' : ''} libsql=${isLibsql}`)
+  console.log(`[finzen] Creating PrismaClient. URL: ${safeDbUrlLabel(runtimeDbUrl)} libsql=${isLibsql}`)
 
   // ── Turso / libSQL path ────────────────────────────────────────
   // When DATABASE_URL is a libsql:// URL, use the @prisma/adapter-libsql
@@ -308,7 +324,7 @@ function createPrismaClient(): PrismaClient {
       }
 
       const adapter = new PrismaLibSQL(libsqlConfig as any)
-      console.log('[finzen] ✅ Using libsql adapter (Turso), URL: ' + libsqlConfig.url)
+      console.log('[finzen] ✅ Using libsql adapter (Turso), URL: ' + safeDbUrlLabel(libsqlConfig.url))
       // IMPORTANT: do NOT pass `datasources` when using `adapter` —
       // Prisma Driver Adapters handle the connection entirely.
       // The schema.prisma's url is a hardcoded "file:./db/placeholder.db"

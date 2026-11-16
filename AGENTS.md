@@ -67,6 +67,14 @@ build) es la barrera de calidad mínima.
 - En dev sin `DATABASE_URL` → SQLite local `file:db/custom.db` con seed.
 - El `url` de `schema.prisma` es un placeholder fijo; la conexión real la
   construye el adapter `@prisma/adapter-libsql` en runtime.
+- ⚠️ **`bun run db:push` NO opera sobre la BD de runtime**: `schema.prisma`
+  fija `url = "file:./db/placeholder.db"` (un binario **versionado** en git y
+  hoy vacío) para que el CLI valide; el runtime usa `DATABASE_URL` (Turso en
+  prod, `db/custom.db` en dev). Para cambios de esquema usa
+  `scripts/migrate-<x>.ts` (con `--dry-run`, backup y `--allow-production`) o
+  `prisma db push --url=file:db/custom.db` **solo en local**. La CLI de
+  Prisma no habla `libsql://`: la conexión de producción la hace el adapter
+  en runtime.
 
 ### Autenticación
 - Interna (rutas `/api/*`): `getServerSession(authOptions)` → `session.user.id`.
@@ -236,6 +244,36 @@ build) es la barrera de calidad mínima.
   type-check de `next build` (ventaja: los tests no pueden mentir sobre los
   tipos).
 
+### Rate limit compartido y rutas legacy (11-A0)
+- **Nunca un `Map` en memoria como autoridad:** todo limitador pasa por
+  `src/lib/services/rate-limit.ts` (interfaz `RateLimitStore` enchufable;
+  hoy la implementación compartida es Turso/libSQL). El contador en memoria
+  es solo el *fallback* degradado cuando el almacén compartido no responde.
+- **Identificador del cubeto:** `key:<sha256 de la key>` — **nunca** la key
+  cruda, **nunca** el scope en un log. El **mismo scope** lo usan
+  `/api/v1/*` y las rutas legacy `/api/agent/*` (un agente no puede saltarse
+  el límite cambiando de ruta).
+- **Degradación:** si el store compartido falla (tabla ausente en prod, Turso
+  caído, timeout) → se sigue sirviendo con el contador en memoria y se
+  registra un log saneado (`{ scope, reason, name }`, sin key ni hash ni
+  mensaje crudo). **Nunca** un 5xx por este motivo; el modo `strict`
+  (`FINZEN_RATE_LIMIT_FAIL_MODE=strict`) existe para la exposición MCP.
+- **Rutas legacy deprecadas:** errores con shape v1
+  (`{ success:false, error:<snake_case>, message }`), `success:true` **aditivo**
+  y **shape de éxito intacto**, y headers `Deprecation: true` + `Sunset` +
+  `Link … rel="successor-version"` en **todas** las respuestas (2xx y 4xx).
+  La fecha de `Sunset` es una constante compartida (`LEGACY_API_SUNSET` en
+  `src/lib/http/deprecation.ts`) = **`Sun, 14 Feb 2027 00:00:00 GMT`**, y el
+  test de contrato verifica que coincide **literalmente** con `SDD.md`,
+  `AGENTS.md` y `skills.md` (anti-drift). Si una ruta no tiene sucesor v1
+  (hoy `categories`), **no se anuncia `Link`** y su retiro queda
+  **condicionado**: la Fase 1 debe entregar el sucesor antes del `Sunset`;
+  si no llega, se **prorroga** la constante (nunca se rompe un agente
+  externo).
+- **Doble entrada también en las rutas legacy:** el `POST /api/agent/transactions`
+  valida el par real↔virtual (`x_<categoryId>`) en los casos inequívocos y
+  responde `400 invalid_transaction` si no lo respeta.
+
 ### React Compiler (importante)
 El ESLint usa React Compiler. Los `useMemo` cuyas dependencias derivan de
 `new Date()` (impuro) no se pueden preservar y generan el error
@@ -289,6 +327,10 @@ src/hooks/use-undo.ts               # snapshot en memoria + toast + refresh
 src/lib/finzen/undo.ts              # DTOs compartidos de undo (snapshot, comando, códigos)
 src/lib/services/undo-service.ts    # restore idempotente + undo de lote importado
 src/lib/finzen/error-report.ts      # reportero saneado de errores (sin datos personales)
+src/lib/services/rate-limit.ts       # limitador compartido (contratos + store en memoria)
+src/lib/services/rate-limit-store.ts # store compartido sobre Turso/libSQL (SQL atómico)
+src/lib/services/double-entry.ts     # guard puro real↔virtual (doble entrada) reutilizable
+src/lib/http/deprecation.ts          # headers Deprecation/Sunset/Link de las rutas legacy
 src/components/finzen/view-error-boundary.tsx  # boundary de render de las vistas
 src/app/error.tsx                   # boundary de ruta (Next)
 src/app/global-error.tsx            # boundary global (autocontenido)

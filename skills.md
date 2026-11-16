@@ -31,7 +31,7 @@
 - **Ubicación Backend:** `computeNetWorth()` en `src/lib/finzen/finance.ts` (`:14`; junto a `computeTotalAssets` `:39` y `computeTotalLiabilities` `:52`).
 - **Entrada:** `{ userId: string }`
 - **Salida:** `{ netWorth: number, assets: number, liabilities: number }`
-- **Notas de implementación:** las funciones puras reciben `accounts[]` + `baseCurrency` (cada balance se convierte con `convertAmount`); el scoping por `userId` vive hoy inline en legacy `GET /api/agent/summary` (que retorna `netWorth, totalAssets, totalLiabilities`). El contrato de esta skill (`assets`/`liabilities`) prevalece sobre el naming del legacy al extraer el servicio (Fase 1). Cuentas `income`/`expense` = virtuales → se ignoran.
+- **Notas de implementación:** las funciones puras reciben `accounts[]` + `baseCurrency` (cada balance se convierte con `convertAmount`); el scoping por `userId` vive hoy inline en legacy `GET /api/agent/summary` (que retorna `netWorth, totalAssets, totalLiabilities`). El contrato de esta skill (`assets`/`liabilities`) prevalece sobre el naming del legacy al extraer el servicio (Fase 1). Cuentas `income`/`expense` = virtuales → se ignoran. **Fase 0:** la ruta legacy `GET /api/agent/summary` está **deprecada** (rate limit compartido, errores v1, `Sunset: Sun, 14 Feb 2027 00:00:00 GMT`); el servicio con scoping por `userId` es trabajo de Fase 1. Ojo: el legacy **no convierte a `baseCurrency`** y **excluye `equity`** ⇒ sus cifras difieren de `computeNetWorth()` para usuarios multi-moneda; el contrato de la skill prevalece al extraerse el servicio.
 - **Estado MCP:** 🔧 extraer (funciones puras ✅; falta el servicio por `userId`).
 - **Verificación:** test unitario Vitest de las funciones puras (`src/lib/finzen/__tests__/finance.test.ts`, 10-U4) · legacy route en producción.
 
@@ -46,7 +46,7 @@
 
 ### `list_transactions`
 - **Descripción:** Lista transacciones del usuario con filtros opcionales.
-- **Ubicación Backend:** `GET /api/v1/expenses` e `GET /api/v1/incomes` (+ legacy `GET /api/agent/transactions`, con más filtros).
+- **Ubicación Backend:** `GET /api/v1/expenses` e `GET /api/v1/incomes` (+ legacy `GET /api/agent/transactions`, **deprecada** en Fase 0; sus filtros legacy no existen en v1).
 - **Entrada:** `{ limit?: number (def 50, máx 200), month?: "YYYY-MM" }` — el legacy añade `type`, `categoryId`, `fromDate`, `toDate`, `search`.
 - **Salida:** `{ success, count, expenses|incomes: [{ id, amount, currency, category, description, date, account }] }`
 - **Estado MCP:** 🔧 extraer (unificar v1 + legacy en un solo servicio).
@@ -54,7 +54,7 @@
 
 ### `budget_progress` y `alerts`
 - **Descripción:** Progreso por categoría contra el presupuesto y alertas derivadas.
-- **Ubicación Backend:** server-side en legacy `GET /api/agent/summary`; motor cliente en `src/hooks/use-alerts.ts:21` (umbrales de presupuesto, spikes, forecast).
+- **Ubicación Backend:** server-side en legacy `GET /api/agent/summary` (**deprecada** en Fase 0); motor cliente en `src/hooks/use-alerts.ts:21` (umbrales de presupuesto, spikes, forecast). La unificación de ambos (5 reglas de alerta en el motor cliente vs 2 en el legacy, con shapes distintos) es trabajo de **Fase 1**.
 - **Entrada:** `{ month?: "YYYY-MM" (def mes actual) }`
 - **Salida:** `budgetProgress: [{ category, categoryEs, icon, planned, spent, remaining, pct, threshold }]` · `alerts: [{ severity: "critical"|"warning", message }]`
 - **Notas:** alertas: categoría ≥ 100% (critical), ≥ threshold (warning), savings ratio < 10% (warning).
@@ -219,6 +219,8 @@ cuando se expongan como tools.
 | `keyboard_shortcuts` | `src/hooks/use-global-shortcuts.ts` + `src/components/finzen/command-palette.tsx` + `src/components/finzen/shortcuts-dialog.tsx`: atajos globales `⌘K`/`Ctrl+K` (paleta), `?` (ayuda), `Alt+1..7` (vista N), `Alt+N` (nueva transacción). Reglas: nunca disparar atajos con el foco en un campo editable ni con un modal abierto; la tabla de atajos se define en **una** constante compartida por el handler y el diálogo de ayuda. Verificación: `bun run verify` + recorrido manual por teclado. |
 | `destructive_undo` | `src/lib/services/undo-service.ts` + `src/app/api/undo/route.ts` + `src/hooks/use-undo.ts`: snapshot en memoria durante 10 s; restore con ID original; **recibo HMAC firmado en el DELETE y validado antes de escribir** (prueba de propiedad: el snapshot viene del cliente); precondición `updatedAt` para lotes importados; no modifica `/api/v1/*`. |
 | `error_boundary` | `src/app/error.tsx` + `src/app/global-error.tsx` + `src/components/finzen/view-error-boundary.tsx`: fallback i18n, retry + dashboard, logging saneado; los errores de acciones siguen mostrándose como toast. |
+| `shared_rate_limit` | `src/lib/services/rate-limit.ts` (contratos + `createRateLimiter` + store en memoria) + `src/lib/services/rate-limit-store.ts` (store compartido Turso). Todo endpoint autenticado por API key debe llamar a `authenticateV1Request` (v1) o usar el mismo *scope* `key:<sha256>`; **nunca** crear un `Map` en memoria como autoridad (solo como *fallback* degradado). Verificación: `bun run verify` + test de burst 429 (`scripts/e2e-rate-limit-v1.js`). |
+| `deprecate_endpoint` | `src/lib/http/deprecation.ts`: `withLegacyDeprecation(res, successor)` añade `Deprecation: true` + `Sunset` + `Link … rel="successor-version"`; los errores se normalizan al shape `{ success:false, error:<snake_case>, message }` **sin tocar el shape de éxito**; la fecha de `Sunset` es una constante compartida y el test de contrato verifica que coincide literalmente con `SDD.md` (anti-drift). |
 | `add_endpoint_interno` | `getServerSession(authOptions)` + early return 401 sin `session.user.id` |
 | `add_endpoint_v1` | `authenticateV1Request` (`src/lib/auth/v1-api.ts`) + errores `{ success: false, error: snake_case }` |
 | `db_schema_change` | Editar `schema.prisma` → `bun run db:generate` → `bun run db:push` → sincronizar interfaces del store (frontera de tipos) |

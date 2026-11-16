@@ -112,6 +112,15 @@ CREATE TABLE "ApiKey" (
     CONSTRAINT "ApiKey_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- CreateTable
+CREATE TABLE "RateLimitBucket" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "hits" INTEGER NOT NULL DEFAULT 0,
+    "windowStartMs" BIGINT NOT NULL,
+    "expiresAtMs" BIGINT NOT NULL,
+    "updatedAtMs" BIGINT NOT NULL
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -138,4 +147,7 @@ CREATE UNIQUE INDEX "ApiKey_keyHash_key" ON "ApiKey"("keyHash");
 
 -- CreateIndex
 CREATE INDEX "ApiKey_userId_idx" ON "ApiKey"("userId");
+
+-- CreateIndex
+CREATE INDEX "RateLimitBucket_expiresAtMs_idx" ON "RateLimitBucket"("expiresAtMs");
 

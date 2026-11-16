@@ -39,7 +39,7 @@ Eres el Agente Orquestador Principal de Shikin. Tu función es coordinar la lect
 | Skill invocada | Implementación hoy | Estado MCP (`skills.md`) |
 |---|---|---|
 | `get_financial_summary` | `GET /api/v1/summary` (`?month=YYYY-MM`) | 🔧 extraer |
-| `get_net_worth` | legacy `GET /api/agent/summary` (`netWorth`, `totalAssets`, `totalLiabilities`) | 🔧 extraer |
+| `get_net_worth` | `computeNetWorth()` en `src/lib/finzen/finance.ts` (el legacy `GET /api/agent/summary` queda **deprecado** en Fase 0; el servicio con scoping por `userId` es Fase 1) | 🔧 extraer |
 | `record_expense` | `POST /api/v1/expenses` (+ `resolve_category`, `resolve_account`) | 🔧 extraer |
 | `record_income` | `POST /api/v1/incomes` (+ `resolve_category`, `resolve_account`) | 🔧 extraer |
 | `create_account` | `POST /api/v1/accounts` + `accounts-service.ts` | 🔧 extraer |
