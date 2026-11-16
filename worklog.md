@@ -7093,7 +7093,8 @@ OpenAI** (`LLM_BASE_URL` configurable, cero dependencias nuevas: `fetch` +
 **Owner:** Edwin (aprobación: "dale" + 4 decisiones de criterio, 15-nov-2026)
 **Status:** ✅ Cerrado en código — revisor APRUEBA (0 bloqueantes), `bun run verify` exit 0 · **pendiente la operación de prod** (tabla `RateLimitBucket` en Turso)
 **Base:** `4fe320b` (cierre de docs de 10-U4)
-**Commit:** `0ef83ce` — pusheado a `main` el 15-nov-2026
+**Commit:** `0ef83ce` (código) + `751399a` (memoria) — pusheados a `main` el 15-nov-2026
+**Deploy:** automático en Vercel, **verificado por comportamiento** (sin CLI de Vercel local): `/login` → 200 · `/` → 200 · `GET /api/agent/accounts` sin key → **401** con `Deprecation: true` + `Sunset: Sun, 14 Feb 2027 00:00:00 GMT` + `Link: </api/v1/accounts>; rel="successor-version"` y body `{success:false,error:'missing_api_key',message}` (shape v1) · v1 sin key → 401 `missing_api_key` · v1 y legacy con key inválida → 401 `invalid_api_key` · **0 5xx** (degradación a memoria: la tabla aún no existe en prod)
 
 ### Objetivo
 
