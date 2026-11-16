@@ -77,7 +77,7 @@
 
 ## 4. Estado actual (15-nov-2026)
 
-**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + **test** + build + copia portable a standalone. Desde 10-U4 el harness incluye **Vitest** (`bun run test`): **178 tests / 14 ficheros**. `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd`. E2E accounts v1 21/21 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`, desplegada: build id `oHDUufpsKCny2Xep00Hs2`).
+**Barreras de calidad:** **`bun run verify` VERDE (exit 0)** — lint + typecheck + **test** + build + copia portable a standalone. Desde 10-U4 el harness incluye **Vitest** (`bun run test`): **232 tests / 18 ficheros** (tras la Fase 0 del bloque de agentes; eran 178/14 al cerrar 10-U4). `bun` v1.4.4 disponible en `node_modules\.bin\bun.cmd`. E2E accounts v1 21/21 en dev ✓ · E2E rate limit v1+legacy 9/9 en dev ✓ · fixtures parsers bancarios 33/33 ✓ · smoke rebrand en producción ✓ · **deploy de 10-U0 confirmado en producción** (build id `TalGg…` → `rR0OK7…`) · **10-U1 commiteada y pusheada** (`821ee87`, desplegada: build id `oHDUufpsKCny2Xep00Hs2`).
 
 **✅ MIGRACIÓN DE COLORES EN TURSO EJECUTADA (14-nov-2026):** con el visto bueno del dueño y la `DATABASE_URL` facilitada por él, `scripts/migrate-category-colors.ts` corrió contra producción: dry-run → apply → control. **95/95 categorías migradas** de HEX a claves `cat-N` (13 sin color intactas, 0 ya en token antes). Backup en `db/category-colors.2026-11-14T20-32-27-727Z.backup` (gitignored). Dry-run de control: 0 pendientes. La BD de prod ya cumple la convención 10-U1. **Acción pendiente de Edwin: rotar el token de Turso** (es una credencial de escritura que pasó por el chat).
 
@@ -88,6 +88,23 @@
 **✅ 10-U3 COMMITEADA Y PUSHEADA (14-nov-2026):** commit `e95c9ab` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `OyfVzV_GhlmJsZfBn6qDg`; `/login` y `/` → 200). Working tree limpio. 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
 
 **✅ 10-U4 COMMITEADA Y PUSHEADA (15-nov-2026):** commit `6de1007` → `main` (`origin/main` verificado). **Deploy confirmado en producción** (build id `dUTSw_YTmKneIWj95rlL0`; `/login` y `/` → 200). Working tree limpio. 10-U3 = `e95c9ab` · 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
+
+**✅ FASE 0 DEL BLOQUE DE AGENTES COMMITEADA Y PUSHEADA (15-nov-2026):** commit `0ef83ce` → `main` (`origin/main` verificado). Working tree limpio tras el commit de docs. 10-U4 = `6de1007` · 10-U3 = `e95c9ab` · 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
+
+Sesión 15-nov-2026 (Fase 0 del bloque de agentes — rate limit compartido + `/api/agent/*` deprecadas; flujo coordinador→planificador→implementador→revisor; **el revisor rechazó la primera entrega** por 1 bloqueante de arquitectura y la re-revisión fue **APRUEBA**, 0 bloqueantes):
+- **Alcance:** 9 pasos atómicos (spec → limitador puro → store Turso + modelo → integración v1 → normalización legacy → tests de contrato → script de operación → E2E → purga de deps) + 5 correcciones post-revisión. Cierra la parte de código de la Fase 0 del roadmap; **la operación de prod queda separada** (ver §5).
+- **Spec primero (coordinador):** `SDD.md` §2 (rate limit compartido + rutas legacy deprecadas), §3 (rate limiting), §4 (9º modelo `RateLimitBucket`), §5 **convención 11** (11-A0), §6 (fila Fase 0 con estado), §7 ítems 3 y 5; `skills.md` §1 (`get_net_worth`, `list_transactions`, `budget_progress`/`alerts`) y §6 (recetas `shared_rate_limit`, `deprecate_endpoint`); `AGENTS.md` §4 (aviso: `db:push` no opera sobre la BD de runtime), §5 (subsección "Rate limit compartido y rutas legacy (11-A0)"), §6 (mapa); `agents/orchestrator.md:42` (**una** celda; el vocabulario de skills invocables NO cambia).
+- **Decisiones de Edwin (4, todas las recomendadas):** plan completo · **sí** al guard de doble entrada en el POST legacy (solo los 2 casos inequívocos) · sunset **90 días → `Sun, 14 Feb 2027 00:00:00 GMT`** (con prórroga si no hay sucesor) · fallo del store → **fallback a memoria** (nunca 5xx), `strict` solo por env.
+- **Hallazgo del planificador que cambió el enfoque:** `GET /api/agent/summary` (net worth, presupuestos, alertas) y `GET /api/agent/categories` **no tienen sucesor en v1** → borrarlas rompería a los agentes reales de Edwin ⇒ la estrategia es **deprecar y normalizar**, no eliminar (shape de éxito **intacto**, solo `success:true` aditivo).
+- **Rate limit compartido:** `src/lib/services/rate-limit.ts` (puro: `RateLimitPolicy/Store/Scope/Decision`, `apiKeyScope`, `createRateLimiter`, `InMemoryRateLimitStore` como fallback, `RateLimitUnavailableError`) + `src/lib/services/rate-limit-store.ts` (Turso/libSQL, **una sola sentencia atómica** `INSERT…ON CONFLICT DO UPDATE…RETURNING`, 10 placeholders; plan B `$executeRaw`+`$queryRaw` si el motor no soporta `RETURNING`). Cubeto **`key:<sha256>`** ⇒ **v1 y legacy comparten el mismo cubeto** (un agente no puede saltarse el límite cambiando de ruta). Ventana **fija anclada al primer hit**.
+- **Degradación:** si el store compartido lanza ⇒ `degraded=true`, se sirve con el contador en memoria y **nunca** hay 5xx; con `FINZEN_RATE_LIMIT_FAIL_MODE=strict` ⇒ `503 rate_limit_unavailable`. Log **saneado** (`{scope:'rate-limit', reason, name}` + stack sin la primera línea), razón canónica: `table_missing|timeout|unknown`, máx. 1 por proceso y minuto, **sin** el scope (contiene el hash) ni la key.
+- **Desviación validada por el revisor — `Int` → `BigInt`:** epoch-ms **no cabe en `Int`/Int32**; Prisma+SQLite rechaza la conversión (`Conversion failed: Value 1700000000000 does not fit in an INT column`). Las 3 columnas de tiempo son **BigInt** (DDL `BIGINT`, `typeof='integer'` en SQLite). La spec (§4) ahora declara el tipo para que no vuelva a colarse un `Int`.
+- **`/api/agent/*` deprecadas y normalizadas:** auth unificada (`X-API-Key` **o** `Authorization: Bearer`), rate limit compartido, errores con shape v1 (`{success:false,error:<snake_case>,message}`; status **400** — no 422; el POST de éxito sigue en **200** — no 201) y headers `Deprecation: true` + `Sunset` + `Link … rel="successor-version"` en **todas** las respuestas (2xx, 4xx, 429, 503). `categories` **no** emite `Link` (no hay sucesor v1); el `Link` de `summary` apunta a `/api/v1/summary` como **sucesor parcial**.
+- **Guard de doble entrada:** `POST /api/agent/transactions` valida el par real↔virtual (`x_<categoryId>`) en los 2 casos inequívocos ⇒ `400 invalid_transaction` con mensaje que remite a `/api/v1/expenses|incomes`; el **caso ambiguo (ingreso sin categoría) se deja igual** (Fase 1). Lógica en **`src/lib/services/double-entry.ts`** (módulo puro, sin BD ni Next) — el revisor **rechazó** la primera entrega por tenerla inline en el handler.
+- **Purga de dependencias:** `@radix-ui/react-progress` y `@types/bcryptjs` eliminadas (**−2 líneas** en `package.json`, **0 añadidas**); `zod` **se conserva** (reservada al bloque de agentes: eliminarla obligaría a "añadir" una dependencia después, violando la decisión de Edwin de cero dependencias nuevas). Lockfile: instancias `name@version` **0 eliminadas ajenas y 0 cambios de versión ajenos**; `bun install --frozen-lockfile` ⇒ sin cambios.
+- **Seguridad (hallazgo del revisor, arreglado):** `src/lib/db.ts` **logueaba la API key cruda** en el arranque ⇒ ahora solo el `keyPrefix` + mensaje genérico; y el `authToken` de Turso (query string de `DATABASE_URL`) ya **no** se loguea (`safeDbUrlLabel()`). Además, la key de demo autogenerada ya **no es recuperable** desde los logs ⇒ **Edwin debe crear una key nueva** desde el gestor in-app (la key completa solo se muestra al crearla).
+- **Verificación:** `bun run verify` exit 0 (lint + typecheck + **232 tests / 18 ficheros** + build, 25 rutas) en el cierre del coordinador y en las 2 revisiones. E2E real en dev **9/9**: 401 sin key · 60×200 → 61ª 429 (`Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Window`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`) · **legacy 429** justo después (mismo cubeto ⇒ sin bypass) · 200 tras la ventana · 200 legacy con shape intacto · 401 sin key · 401 key inválida · 403 POST con key read-only. **Atomicidad 25→25** en BD temporal. **Control negativo demostrado:** los tests nuevos fallan contra el código viejo (12 fallos / 3 ficheros). `prisma migrate diff` ≡ `db/schema.sql` (solo la tabla + su índice). `db/custom.db` y `db/placeholder.db` con hash intactos; 0 tests contra Turso.
+- **Desviaciones aceptadas:** `Int`→`BigInt` (imposibilidad técnica, documentada en `SDD.md` §4 y `prisma/schema.prisma`); el mensaje de `db.ts` sobre la key de demo (la key ya no se puede recuperar de los logs ⇒ hay que crearla de nuevo en el gestor).
 
 Sesión 15-nov-2026 (10-U4 — drill-down + Vitest; flujo coordinador→planificador→implementador→revisor; **3 revisiones**, todas **APRUEBA**, 0 bloqueantes; cierra el bloque UI U0→U4):
 - **Alcance:** 8 pasos atómicos (spec → infra Vitest → P0 tests undo → P1 dominio puro → núcleo puro del drill-down → cableado → superficies → P2/P3). Deja lista la **red de tests** que desbloquea el bloque de agentes.
@@ -431,12 +448,24 @@ pendiente de repoint (§5).
    `getshikin.com`), es compra/DNS aparte.
 5. **Onboarding de saldos iniciales:** crear cuenta con balance ≠ 0 genera
    un "adjustment"? Flujo manual — mejorar UX de primera carga.
-6. **Rate limit de la API v1:** documentado en worklog 7.5; verificar
-   implementación real si el uso público crece.
+6. **Rate limit de la API v1:** ~~documentado en worklog 7.5~~ **RESUELTO EN
+   CÓDIGO (Fase 0, 15-nov-2026):** limitador compartido sobre Turso
+   (`RateLimitBucket`, 1 fila por principal, `INSERT…ON CONFLICT DO UPDATE…
+   RETURNING` atómico), cubeto `key:<sha256>` **compartido** por v1 y legacy,
+   con degradación a memoria si el almacén no responde (nunca 5xx) y modo
+   `strict` por env. **PENDIENTE LA OPERACIÓN DE PROD** (ver deuda #30).
 7. **`package.json` name** sigue siendo `nextjs_tailwind_shadcn_ts` (cosmético).
-8. **Dualidad `/api/v1` vs `/api/agent/*` (legacy):** las rutas agent duplican
-   capacidades sin rate limit y con shape de error distinto (`{ error }`).
-   Deprecar en la Fase 0 del roadmap de `SDD.md` §6 antes de exponer tools MCP.
+8. ~~**Dualidad `/api/v1` vs `/api/agent/*` (legacy):**~~ **RESUELTO (Fase 0,
+   15-nov-2026):** las 4 rutas legacy se **deprecaron** (no se borran):
+   auth unificada (`X-API-Key` o `Authorization`), rate limit compartido,
+   errores con shape v1 (`{success:false,error:<snake_case>,message}`),
+   `success:true` **aditivo** con shape de éxito **intacto**, y headers
+   `Deprecation`/`Sunset`/`Link` en todas las respuestas. `Sunset` =
+   `Sun, 14 Feb 2027 00:00:00 GMT`. **PENDIENTE (Fase 1):** successors v1
+   para `netWorth`/`budgetProgress`/`alerts` y para `categories` (hoy **sin**
+   sucesor ⇒ sin `Link`); si no llegan antes del `Sunset`, hay que **prorrogar**
+   la constante `LEGACY_API_SUNSET`. La lógica inline de las legacy (net worth,
+   budgets, alerts) aún no está extraída a `src/lib/services/`.
 9. **Módulo Importar — i18n y a11y:** ~~strings inline es/en y `<div>`s
    clickeables sin `role="button"`/teclado~~ **RESUELTO (10-U0, 12-nov-2026):**
    las 3 vistas del módulo (import-view, ocr-flow, bank-import-flow) pasaron a
@@ -574,6 +603,33 @@ pendiente de repoint (§5).
     *seam* para el futuro runtime de agentes: cuando exista, solo debe recibir
     `{ scope, name, digest?, stack? }` — **nunca** emails, descripciones,
     nombres de cuenta, API keys, headers ni snapshots.
+30. **🔴 OPERACIÓN DE PROD PENDIENTE (Fase 0):** crear la tabla `RateLimitBucket`
+    en Turso. El código ya está desplegado y funciona en **fallback** (contador
+    en memoria por lambda, el comportamiento previo ⇒ **no hay downtime**),
+    pero el límite **no es compartido entre lambdas** hasta que la tabla exista.
+    Requiere la `DATABASE_URL` de Edwin + su visto bueno:
+    `bun run scripts/migrate-rate-limit-table.ts --dry-run` → `--apply
+    --allow-production` → `--verify` (backup en `db/*.backup`, gitignored;
+    el gate aborta **antes** de abrir conexión si falta `--allow-production` y
+    nunca imprime el token). **Después**: control en prod (2 lambdas distintas
+    → mismo cubeto → 429 compartido + ningún 5xx por tabla ausente). Hasta
+    esa verificación, `SDD.md` §7 ítem 3 **sigue bloqueando la Fase 3 (MCP)**.
+31. **🔴 Key de demo de producción inutilizable (consecuencia del arreglo de
+    seguridad):** `src/lib/db.ts` ya **no** loguea la API key cruda ⇒ la
+    "Production demo key" autogenerada en prod **no se puede recuperar** de los
+    logs (la key completa solo se muestra una vez, al crearla). **Edwin debe
+    crear una key nueva** desde el gestor in-app de API keys y revocar la
+    anterior. Mientras tanto, los agentes externos que usen esa key(old) siguen
+    funcionando (la key sigue válida en la BD) — solo se pierde la **copia** de
+    la key.
+32. **Observaciones del revisor (Fase 0, fuera de alcance):** (a) `POST
+    /api/agent/transactions` **no valida** que `fromAccountId`/`toAccountId`
+    pertenezcan al usuario (no hay FK; comportamiento preexistente) → Fase 1
+    (`transactions-service`); (b) el `legacy summary` **no convierte a
+    `baseCurrency`** ni incluye `equity` ⇒ sus cifras difieren de
+    `computeNetWorth()` para usuarios multi-moneda → Fase 1; (c) las alertas
+    del legacy (2 reglas) y las de `use-alerts.ts` (5 reglas) siguen
+    desincronizadas → Fase 1.
 
 ## 6. Lecciones aprendidas (para no repetir errores)
 
@@ -664,6 +720,29 @@ pendiente de repoint (§5).
   código** (en U4 dejó la fase a medio hacer). Al recuperar: **auditar el
   working tree antes de volver a delegar** (`git status --short` + `bun run
   verify`) y continuar desde el estado real, no relanzar a ciegas.
+- **Un `Map` en memoria no es un rate limit en serverless** (15-nov-2026): en
+  Vercel cada lambda tiene su propio `Map` ⇒ el límite real es **60 × nº de
+  lambdas** y una lambda fría reinicia el contador. El límite compartido
+  necesita un almacén con **upsert atómico** (Turso/libSQL sirve:
+  `INSERT…ON CONFLICT DO UPDATE…RETURNING`, verificado con 25 incrementos
+  concurrentes ⇒ 25). Corolario de diseño: la **interfaz del store** enchufable
+  permite que MCP y consola in-app reutilicen el mismo limitador con otro
+  *scope* (`user:<id>`, `session:<id>`) sin una segunda implementación.
+- **Epoch-ms no cabe en `Int` de Prisma+SQLite** (15-nov-2026): el error es
+  `Conversion failed: Value 1700000000000 does not fit in an INT column` ⇒
+  las columnas de tiempo en milisegundos van **BigInt** (en SQLite,
+  `BIGINT` sigue teniendo `typeof='integer'`). El plan inicial decía `Int` y
+  fue **inejecutable**; el implementador ajustó el tipo y la spec se actualizó
+  (§4). Regla: cuando un plan fija un tipo de columna, comprobar que el valor
+  real cabe **antes** de codificar.
+- **Arreglar una fuga de secretos puede inutilizar una credencial** (15-nov-2026):
+  `src/lib/db.ts` logueaba la API key cruda al autogenerar la "Production demo
+  key"; al dejar de loguearla, esa key **ya no es recuperable** (la key
+  completa solo se muestra al crearla). No es una regresión del código: es una
+  consecuencia **deseable**, pero hay que **avisar al dueño** (crear una key
+  nueva desde el gestor in-app). Aplicar el mismo criterio al `authToken` de
+  Turso, que viajaba en el query string de `DATABASE_URL` y se logueaba
+  truncado.
 
 ## 7. Personas y contexto
 

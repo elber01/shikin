@@ -7085,3 +7085,153 @@ Con **multi-tenant** (la clave del proveedor LLM es **por usuario**: cifrado
 en reposo, aislamiento y cuotas por plan) y **endpoint LLM compatible con
 OpenAI** (`LLM_BASE_URL` configurable, cero dependencias nuevas: `fetch` +
 `zod` ya instalados).
+
+## PHASE 11 — FASE 0 del bloque de agentes: rate limit compartido (Turso) + `/api/agent/*` deprecadas
+
+**Task ID:** 11-A0
+**Agent:** Coordinador → Planificador → Implementador → Revisor (2 revisiones)
+**Owner:** Edwin (aprobación: "dale" + 4 decisiones de criterio, 15-nov-2026)
+**Status:** ✅ Cerrado en código — revisor APRUEBA (0 bloqueantes), `bun run verify` exit 0 · **pendiente la operación de prod** (tabla `RateLimitBucket` en Turso)
+**Base:** `4fe320b` (cierre de docs de 10-U4)
+**Commit:** `0ef83ce` — pusheado a `main` el 15-nov-2026
+
+### Objetivo
+
+Cerrar la **Fase 0** del bloque de agentes (el roadmap que Edwin dejó fijado al
+pedir manejar sus agentes **dentro** de la app): (a) **rate limit compartido**
+— hoy es un `Map` en memoria, inválido en serverless multi-lambda y declarado
+como bloqueador de la Fase 3 (MCP) —, (b) **deprecación/normalización** de
+`/api/agent/*`, y (c) **auditoría de dependencias muertas**.
+
+### Decisiones de criterio (aprobadas por Edwin)
+
+- Plan completo (4 opciones recomendadas).
+- **Sí** al guard de doble entrada en `POST /api/agent/transactions` (solo los
+  2 casos inequívocos).
+- **Sunset de 90 días** → `Sun, 14 Feb 2027 00:00:00 GMT` (con prórroga si no
+  hay sucesor v1).
+- Fallo del store compartido → **fallback a memoria** (nunca 5xx); `strict`
+  (503) solo por env.
+
+### Spec primero (coordinador, antes del código)
+
+| Documento | Cambio |
+|---|---|
+| `SDD.md` §2 | Rate limit compartido (cubeto `key:<sha256>`, ventana fija, degradación, modo strict, contrato 429) + bloque "Rutas legacy deprecadas" |
+| `SDD.md` §3 | Rate limiting: el limitador compartido se reutiliza en MCP y consola (mismo `scope`, otra identidad) |
+| `SDD.md` §4 | 9º modelo `RateLimitBucket` (columnas de tiempo **BigInt**) |
+| `SDD.md` §5 | **Convención 11** (11-A0): rate limit compartido y rutas legacy |
+| `SDD.md` §6 | Fila Fase 0 con el estado real |
+| `SDD.md` §7 | Ítems 3 (rate limit) y 5 (dualidad v1/legacy) actualizados |
+| `skills.md` §1 | `get_net_worth`, `list_transactions`, `budget_progress`/`alerts` → legacy deprecado + avisos de conversión/`equity` |
+| `skills.md` §6 | Recetas `shared_rate_limit` y `deprecate_endpoint` |
+| `AGENTS.md` §4 | Aviso: `bun run db:push` **no** opera sobre la BD de runtime |
+| `AGENTS.md` §5 | Subsección "Rate limit compartido y rutas legacy (11-A0)" |
+| `AGENTS.md` §6 | Mapa del repo (limitador, store, deprecación, guard) |
+| `agents/orchestrator.md:42` | **Una** celda (`get_net_worth` → `computeNetWorth()`); el vocabulario de skills invocables NO cambia |
+
+### Los 9 pasos
+
+1. **Limitador puro** (`src/lib/services/rate-limit.ts`): `RateLimitPolicy`,
+   `RateLimitStore`, `RateLimitScope`, `RateLimitDecision`,
+   `apiKeyScope`, `createRateLimiter`, `InMemoryRateLimitStore` (fallback),
+   `RateLimitUnavailableError`. Sin import de BD.
+2. **Store compartido** (`src/lib/services/rate-limit-store.ts`): Turso/libSQL
+   con **una sola sentencia atómica** `INSERT…ON CONFLICT DO UPDATE…RETURNING`
+   (10 placeholders) + plan B (`$executeRaw`+`$queryRaw`) + clasificación de
+   errores (`table_missing|timeout|unknown`).
+3. **Modelo + DDL**: `prisma/schema.prisma` (9º modelo, tiempos **BigInt**),
+   `db/schema.sql` regenerado (`prisma migrate diff` ≡ dump).
+4. **Integración v1** (`src/lib/auth/v1-api.ts`): sustituye el `Map`; orden de
+   auth intacto (key ausente → 401 **sin tocar la BD**); 429 con body y headers
+   intactos + `X-RateLimit-Remaining`/`X-RateLimit-Reset`; 503 en modo strict.
+5. **Legacy normalizadas** (4 rutas): auth unificada, rate limit compartido,
+   errores con shape v1, `success:true` aditivo, **shape de éxito intacto**,
+   headers de deprecación en todas las respuestas.
+6. **Guard de doble entrada**: `src/lib/services/double-entry.ts` (puro) +
+   test unitario; el handler solo resuelve cuentas y devuelve el 400.
+7. **Script de operación** (`scripts/migrate-rate-limit-table.ts`): dry-run
+   (default) / apply / verify / rollback, gate `--allow-production` **antes de
+   abrir conexión**, backup gitignored, destino descrito sin el token.
+8. **E2E** (`scripts/e2e-rate-limit-v1.js`): 9 checks; el burst se omite fuera
+   de local; la key nunca se loguea.
+9. **Purga de dependencias**: `@radix-ui/react-progress` y `@types/bcryptjs`
+   fuera; `zod` **se conserva** (reservada al bloque de agentes).
+
+### Hallazgos que cambiaron el enfoque
+
+- **No se puede borrar `/api/agent/*`**: `summary` (net worth, presupuestos,
+  alertas) y `categories` **no tienen sucesor en v1** ⇒ borrarlas rompería a los
+  agentes reales de Edwin ⇒ la estrategia es **deprecar y normalizar**, con el
+  shape de éxito intacto.
+- **`Int` → `BigInt`** (validado por el revisor): epoch-ms no cabe en
+  `Int`/Int32; Prisma+SQLite rechaza la conversión. El plan inicial era
+  **inejecutable**; el tipo se ajustó y la spec (§4) declara el tipo.
+- **El bloqueante de la primera revisión:** el guard de doble entrada quedó
+  inline en el route handler (incumplía el plan §9.5 y `agent.md` §2) ⇒ se
+  extrajo a `src/lib/services/double-entry.ts` con test propio.
+- **Fuga de secretos preexistente** (detectada por el revisor):
+  `src/lib/db.ts` logueaba la API key cruda y el `authToken` de Turso (query
+  string de `DATABASE_URL`) ⇒ ahora solo `keyPrefix` y `safeDbUrlLabel()`.
+
+### Archivos creados/modificados
+
+- Nuevos: `src/lib/services/rate-limit.ts`, `src/lib/services/rate-limit-store.ts`,
+  `src/lib/services/double-entry.ts`, `src/lib/http/deprecation.ts`,
+  `scripts/migrate-rate-limit-table.ts`, `scripts/e2e-rate-limit-v1.js`,
+  `src/lib/services/__tests__/rate-limit.test.ts`,
+  `src/lib/services/__tests__/rate-limit-store.db.test.ts`,
+  `src/lib/services/__tests__/double-entry.test.ts`,
+  `src/lib/http/__tests__/deprecation.test.ts`.
+- Modificados: `src/lib/auth/v1-api.ts`, `src/lib/auth/__tests__/v1-contract.test.ts`,
+  `src/app/api/agent/{summary,transactions,accounts,categories}/route.ts`,
+  `src/lib/db.ts`, `prisma/schema.prisma`, `db/schema.sql`, `package.json`,
+  `bun.lock`, `SDD.md`, `skills.md`, `AGENTS.md`, `agents/orchestrator.md`.
+
+### Verificación
+
+- `bun run verify` **exit 0** (lint + typecheck + **232 tests / 18 ficheros** +
+  build, 25 rutas) en el cierre del coordinador y en las 2 revisiones
+  (178 → 232 tests).
+- **E2E real en dev 9/9**: 401 sin key · 60×200 → 61ª 429 (`Retry-After`,
+  `X-RateLimit-Limit`, `X-RateLimit-Window`, `X-RateLimit-Remaining`,
+  `X-RateLimit-Reset`) · **legacy 429** justo después (mismo cubeto ⇒ sin
+  bypass) · 200 tras la ventana · 200 legacy con shape intacto · 401 sin key ·
+  401 key inválida · 403 POST con key read-only.
+- **Atomicidad 25→25** en BD temporal (25 hits concurrentes).
+- **Control negativo demostrado**: los tests nuevos fallan contra el código
+  viejo (12 fallos / 3 ficheros) y el guard falla si devuelve `null` siempre
+  (4 de 9).
+- `prisma migrate diff` ≡ `db/schema.sql` (solo la tabla + su índice);
+  `db/custom.db` y `db/placeholder.db` con hash intactos; 0 tests contra Turso.
+- Lockfile: instancias `name@version` **0 eliminadas ajenas y 0 cambios de
+  versión ajenos**; `package.json` **−2 líneas**, 0 añadidas; `zod` conservado.
+- Intactos: `src/app/api/v1/**` (payloads), `src/lib/finzen/finance.ts`,
+  `src/hooks/use-alerts.ts`, `src/components/ui/**`, `src/store/**`.
+
+### Desviaciones aceptadas
+
+- `Int` → `BigInt` en las 3 columnas de tiempo (imposibilidad técnica;
+  documentada en `SDD.md` §4 y `prisma/schema.prisma`).
+- La "Production demo key" de prod ya **no es recuperable** de los logs (arreglo
+  de seguridad) ⇒ hay que crear una key nueva desde el gestor in-app.
+
+### Deuda que esta fase deja abierta
+
+- **🔴 Operación de prod:** crear `RateLimitBucket` en Turso (requiere la
+  `DATABASE_URL` de Edwin + visto bueno). Hasta entonces el limitador degrada a
+  memoria por lambda. `SDD.md` §7 ítem 3 **sigue bloqueando la Fase 3 (MCP)**.
+- **Fase 1:** successors v1 de `netWorth`/`budgetProgress`/`alerts` y de
+  `categories`; extracción de la lógica inline de las legacy a
+  `src/lib/services/`; retiro físico de las legacy (y **prórroga** del `Sunset`
+  si la Fase 1 no llega antes del 14-feb-2027).
+- **Key de demo de prod:** crear una nueva desde el gestor in-app.
+- **Rotación del token de Turso** (deuda previa, sigue abierta).
+
+### Siguiente fase
+
+**Fase 1 — capa de servicios**: extraer la lógica inline de `src/app/api/**`
+(aún vive en los handlers) a `src/lib/services/`, unificar las alertas del
+legacy con `use-alerts.ts`, corregir que el legacy no convierte a
+`baseCurrency` ni incluye `equity`, y crear los sucesores v1 de
+`netWorth`/`budgetProgress`/`alerts`/`categories`.
