@@ -91,6 +91,8 @@
 
 **✅ FASE 0 DEL BLOQUE DE AGENTES COMMITEADA Y PUSHEADA (15-nov-2026):** commits `0ef83ce` (código) + `751399a` (memoria) → `main` (`origin/main` verificado). **Deploy verificado en producción por comportamiento** (sin CLI de Vercel local): `/login` → 200 · `/` → 200 · `GET /api/agent/accounts` sin key → **401** con `Deprecation: true` + `Sunset: Sun, 14 Feb 2027 00:00:00 GMT` + `Link: </api/v1/accounts>; rel="successor-version"` y body `{success:false,error:'missing_api_key',message}` (shape v1) · v1 sin key → 401 `missing_api_key` · v1 y legacy con key inválida → 401 `invalid_api_key` · **0 5xx** (el limitador degrada a memoria porque la tabla aún no existe en prod). Working tree limpio. 10-U4 = `6de1007` · 10-U3 = `e95c9ab` · 10-U2 = `1d65cc8` · 10-U1 = `821ee87` · 10-U0 = `7a53c1f` (todas commiteadas, pusheadas y desplegadas).
 
+**✅ OPERACIÓN DE PROD DE LA FASE 0 EJECUTADA Y CONTROLADA (16-nov-2026):** tabla `RateLimitBucket` **creada en Turso** (dry-run → apply → verify, con backup `db/rate-limit-table.2026-11-16T12-47-58-984Z.backup` gitignored) y **control en producción aprobado**: burst de 61 requests → **60×200 + 1×429** → la legacy recibe **429** con el mismo cubeto → la tabla registra **`hits=62`** ⇒ **el límite ya es compartido entre lambdas** (la Fase 3/MCP deja de estar bloqueada por esto). Se usó una **API key temporal** creada y borrada en el mismo script (0 residuales). BD de prod **intacta** (9 tablas, 363 transacciones, 111 categorías, 4 API keys).
+
 Sesión 15-nov-2026 (Fase 0 del bloque de agentes — rate limit compartido + `/api/agent/*` deprecadas; flujo coordinador→planificador→implementador→revisor; **el revisor rechazó la primera entrega** por 1 bloqueante de arquitectura y la re-revisión fue **APRUEBA**, 0 bloqueantes):
 - **Alcance:** 9 pasos atómicos (spec → limitador puro → store Turso + modelo → integración v1 → normalización legacy → tests de contrato → script de operación → E2E → purga de deps) + 5 correcciones post-revisión. Cierra la parte de código de la Fase 0 del roadmap; **la operación de prod queda separada** (ver §5).
 - **Spec primero (coordinador):** `SDD.md` §2 (rate limit compartido + rutas legacy deprecadas), §3 (rate limiting), §4 (9º modelo `RateLimitBucket`), §5 **convención 11** (11-A0), §6 (fila Fase 0 con estado), §7 ítems 3 y 5; `skills.md` §1 (`get_net_worth`, `list_transactions`, `budget_progress`/`alerts`) y §6 (recetas `shared_rate_limit`, `deprecate_endpoint`); `AGENTS.md` §4 (aviso: `db:push` no opera sobre la BD de runtime), §5 (subsección "Rate limit compartido y rutas legacy (11-A0)"), §6 (mapa); `agents/orchestrator.md:42` (**una** celda; el vocabulario de skills invocables NO cambia).
@@ -603,17 +605,23 @@ pendiente de repoint (§5).
     *seam* para el futuro runtime de agentes: cuando exista, solo debe recibir
     `{ scope, name, digest?, stack? }` — **nunca** emails, descripciones,
     nombres de cuenta, API keys, headers ni snapshots.
-30. **🔴 OPERACIÓN DE PROD PENDIENTE (Fase 0):** crear la tabla `RateLimitBucket`
-    en Turso. El código ya está desplegado y funciona en **fallback** (contador
-    en memoria por lambda, el comportamiento previo ⇒ **no hay downtime**),
-    pero el límite **no es compartido entre lambdas** hasta que la tabla exista.
-    Requiere la `DATABASE_URL` de Edwin + su visto bueno:
-    `bun run scripts/migrate-rate-limit-table.ts --dry-run` → `--apply
-    --allow-production` → `--verify` (backup en `db/*.backup`, gitignored;
-    el gate aborta **antes** de abrir conexión si falta `--allow-production` y
-    nunca imprime el token). **Después**: control en prod (2 lambdas distintas
-    → mismo cubeto → 429 compartido + ningún 5xx por tabla ausente). Hasta
-    esa verificación, `SDD.md` §7 ítem 3 **sigue bloqueando la Fase 3 (MCP)**.
+30. ~~**🔴 OPERACIÓN DE PROD PENDIENTE (Fase 0):**~~ **RESUELTA (16-nov-2026):**
+    la tabla `RateLimitBucket` **existe en Turso** (creada con
+    `scripts/migrate-rate-limit-table.ts --apply --allow-production`; backup en
+    `db/rate-limit-table.2026-11-16T12-47-58-984Z.backup`, gitignored).
+    **Control en prod verificado** con una API key **temporal** (creada y
+    borrada en el mismo script; 0 keys temporales residuales): burst de 61
+    `GET /api/v1/accounts` → **60×200 + 1×429** (`Retry-After: 50`,
+    `X-RateLimit-Limit: 60`, `X-RateLimit-Window: 60s`,
+    `X-RateLimit-Remaining: 0`, `X-RateLimit-Reset`, body
+    `{success:false,error:'rate_limited'}`) → `GET /api/agent/accounts`
+    inmediato → **429** (mismo cubeto, sin bypass) + `Deprecation`/`Sunset` →
+    **la tabla registra `hits=62`** ⇒ el contador vive en Turso y **es
+    compartido entre lambdas** (si fuera en memoria, la tabla estaría vacía).
+    Ventana fija de 60 000 ms anclada al primer hit. BD de prod **intacta**:
+    9 tablas, 7 usuarios, 12 cuentas, 363 transacciones, 111 categorías,
+    2 presupuestos, 4 API keys. **La Fase 3 (MCP) deja de estar bloqueada
+    por este punto.**
 31. **🔴 Key de demo de producción inutilizable (consecuencia del arreglo de
     seguridad):** `src/lib/db.ts` ya **no** loguea la API key cruda ⇒ la
     "Production demo key" autogenerada en prod **no se puede recuperar** de los

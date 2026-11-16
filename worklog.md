@@ -7091,7 +7091,7 @@ OpenAI** (`LLM_BASE_URL` configurable, cero dependencias nuevas: `fetch` +
 **Task ID:** 11-A0
 **Agent:** Coordinador → Planificador → Implementador → Revisor (2 revisiones)
 **Owner:** Edwin (aprobación: "dale" + 4 decisiones de criterio, 15-nov-2026)
-**Status:** ✅ Cerrado en código — revisor APRUEBA (0 bloqueantes), `bun run verify` exit 0 · **pendiente la operación de prod** (tabla `RateLimitBucket` en Turso)
+**Status:** ✅ Cerrado — revisor APRUEBA (0 bloqueantes), `bun run verify` exit 0 · **operación de prod ejecutada y controlada** (tabla `RateLimitBucket` en Turso, 16-nov-2026)
 **Base:** `4fe320b` (cierre de docs de 10-U4)
 **Commit:** `0ef83ce` (código) + `751399a` (memoria) — pusheados a `main` el 15-nov-2026
 **Deploy:** automático en Vercel, **verificado por comportamiento** (sin CLI de Vercel local): `/login` → 200 · `/` → 200 · `GET /api/agent/accounts` sin key → **401** con `Deprecation: true` + `Sunset: Sun, 14 Feb 2027 00:00:00 GMT` + `Link: </api/v1/accounts>; rel="successor-version"` y body `{success:false,error:'missing_api_key',message}` (shape v1) · v1 sin key → 401 `missing_api_key` · v1 y legacy con key inválida → 401 `invalid_api_key` · **0 5xx** (degradación a memoria: la tabla aún no existe en prod)
@@ -7210,6 +7210,26 @@ como bloqueador de la Fase 3 (MCP) —, (b) **deprecación/normalización** de
 - Intactos: `src/app/api/v1/**` (payloads), `src/lib/finzen/finance.ts`,
   `src/hooks/use-alerts.ts`, `src/components/ui/**`, `src/store/**`.
 
+### Operación de prod (16-nov-2026) — con el visto bueno del dueño
+
+Protocolo de 5 pasos, ejecutado contra `libsql://finzen-radiant-virgo-tlprm2.aws-us-east-1.turso.io`
+(host documentado en el worklog de la fase 7.8; la URL **con token** no se imprimió):
+
+| # | Paso | Resultado |
+|---|---|---|
+| 1 | `--dry-run --allow-production` | destino `libsql://finzen-radiant-virgo-tlprm2.aws-us-east-1.turso.io` (sin token) · tabla **NO existe** · índice **NO existe** · 0 filas · **nada escrito** |
+| 2 | `--apply --allow-production` | backup `db/rate-limit-table.2026-11-16T12-47-58-984Z.backup` (gitignored) · tabla **creada** · índice **creado** |
+| 3 | `--verify --allow-production` | **VERIFY OK**: tabla + índice existen, 0 filas |
+| 4 | **Control en prod** (key temporal, borrada al final) | burst de 61 `GET /api/v1/accounts` → **60×200 + 1×429** (`Retry-After: 50`, `X-RateLimit-Limit: 60`, `X-RateLimit-Window: 60s`, `X-RateLimit-Remaining: 0`, `X-RateLimit-Reset`, body `{success:false,error:'rate_limited'}`) → `GET /api/agent/accounts` inmediato → **429** (mismo cubeto ⇒ sin bypass) + `Deprecation: true` + `Sunset` → **la tabla registra `hits=62`** ⇒ **el contador vive en Turso y es compartido entre lambdas** (si fuera en memoria, la tabla estaría vacía) · ventana fija de 60 000 ms anclada al primer hit |
+| 5 | **Limpieza + sanity** | 0 API keys temporales residuales · 0 filas en `RateLimitBucket` · BD de prod **intacta**: 9 tablas · 7 usuarios · 12 cuentas · **363 transacciones** · 111 categorías · 2 presupuestos · 4 API keys · tipos `id:TEXT, hits:INTEGER, windowStartMs:BIGINT, expiresAtMs:BIGINT, updatedAtMs:BIGINT` · **0 5xx** en los smokes de prod |
+
+> El control se hizo con una **API key temporal de solo lectura** creada y borrada en el
+> mismo script: **no se tocó ninguna key de Edwin**. Los scripts de control y de sanity
+> eran temporales y se borraron (árbol de trabajo limpio).
+
+**Consecuencia:** `SDD.md` §7 ítem 3 queda **RESUELTO** ⇒ **la Fase 3 (MCP) deja de estar
+bloqueada** por el rate limit compartido.
+
 ### Desviaciones aceptadas
 
 - `Int` → `BigInt` en las 3 columnas de tiempo (imposibilidad técnica;
@@ -7219,9 +7239,16 @@ como bloqueador de la Fase 3 (MCP) —, (b) **deprecación/normalización** de
 
 ### Deuda que esta fase deja abierta
 
-- **🔴 Operación de prod:** crear `RateLimitBucket` en Turso (requiere la
-  `DATABASE_URL` de Edwin + visto bueno). Hasta entonces el limitador degrada a
-  memoria por lambda. `SDD.md` §7 ítem 3 **sigue bloqueando la Fase 3 (MCP)**.
+- ~~**🔴 Operación de prod:** crear `RateLimitBucket` en Turso~~ **RESUELTA
+  (16-nov-2026):** tabla creada y **controlada en producción** (60×200 → 61ª 429,
+  legacy con el mismo cubeto, `hits=62` en la tabla ⇒ compartido entre lambdas).
+  `SDD.md` §7 ítem 3 cerrado ⇒ **la Fase 3 (MCP) deja de estar bloqueada**.
+- **🔴 Rotar el token de Turso** (deuda previa, sigue abierta): es una credencial
+  de escritura que ya pasó por el chat en dos ocasiones (migración de colores y
+  esta operación) → **debe rotarse**; con el token nuevo, el mismo script
+  `--apply --allow-production` funciona igual (es idempotente).
+- **Key de demo de prod:** crear una nueva desde el gestor in-app (la antigua
+  ya no es recuperable de los logs tras el arreglo de seguridad).
 - **Fase 1:** successors v1 de `netWorth`/`budgetProgress`/`alerts` y de
   `categories`; extracción de la lógica inline de las legacy a
   `src/lib/services/`; retiro físico de las legacy (y **prórroga** del `Sunset`
